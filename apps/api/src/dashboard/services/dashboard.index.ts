@@ -5,3 +5,4 @@ export { DashboardProductsService } from './dashboard-products.service';
 export { DashboardPaymentsService } from './dashboard-payments.service';
 export { DashboardVouchersService } from './dashboard-vouchers.service';
 export { DashboardCustomersService } from './dashboard-customers.service';
+export { DashboardOperationsService } from './dashboard-operations.service';

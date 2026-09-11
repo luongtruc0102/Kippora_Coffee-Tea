@@ -1,5 +1,6 @@
 import UserFooter from '@/components/user/user-footer';
 import UserHeader from '@/components/user/user-header';
+import SystemAvailabilityBoundary from '@/components/user/system-availability-boundary';
 
 export default function UserLayout({
   children,
@@ -13,7 +14,9 @@ export default function UserLayout({
 
       {/* Bù chiều cao header fixed để nội dung không bị che. */}
       <main className="relative min-w-0 flex-1 pt-16">
-        {children}
+        <SystemAvailabilityBoundary>
+          {children}
+        </SystemAvailabilityBoundary>
       </main>
 
       <UserFooter />

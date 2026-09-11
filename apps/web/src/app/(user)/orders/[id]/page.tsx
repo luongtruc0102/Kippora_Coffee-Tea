@@ -108,7 +108,7 @@ export default function UserOrderDetailPage() {
 
       requestInFlight = true;
       try {
-        const accessToken = localStorage.getItem("accessToken");
+        const accessToken = sessionStorage.getItem("accessToken");
         if (!accessToken) {
           router.replace(`/login?redirect=/orders/${params.id}`);
           return;
@@ -180,7 +180,7 @@ export default function UserOrderDetailPage() {
       setCancelling(true);
       setActionToast(null);
 
-      const accessToken = localStorage.getItem("accessToken");
+      const accessToken = sessionStorage.getItem("accessToken");
       if (!accessToken) {
         router.replace(`/login?redirect=/orders/${order.id}`);
         return;
@@ -224,7 +224,7 @@ export default function UserOrderDetailPage() {
       setReordering(true);
       setActionToast(null);
 
-      const accessToken = localStorage.getItem("accessToken");
+      const accessToken = sessionStorage.getItem("accessToken");
       if (!accessToken) {
         router.replace(`/login?redirect=/orders/${order.id}`);
         return;

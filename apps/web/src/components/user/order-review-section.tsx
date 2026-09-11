@@ -201,7 +201,7 @@ export default function OrderReviewSection({
         setLoading(true);
 
         const accessToken =
-          localStorage.getItem(
+          sessionStorage.getItem(
             "accessToken",
           );
 
@@ -261,7 +261,7 @@ export default function OrderReviewSection({
       setSaving(true);
 
       const accessToken =
-        localStorage.getItem(
+        sessionStorage.getItem(
           "accessToken",
         );
 
@@ -352,7 +352,7 @@ export default function OrderReviewSection({
       setSaving(true);
 
       const accessToken =
-        localStorage.getItem(
+        sessionStorage.getItem(
           "accessToken",
         );
 

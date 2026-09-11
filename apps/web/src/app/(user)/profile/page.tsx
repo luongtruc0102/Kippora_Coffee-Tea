@@ -1,14 +1,11 @@
 "use client";
 
-import Link from "next/link";
-
 import {
   useEffect,
   useState,
 } from "react";
 
 import {
-  ChevronRight,
   Coins,
   Home,
   Mail,
@@ -16,11 +13,10 @@ import {
   Pencil,
   Phone,
   Plus,
-  ShoppingBag,
-  Star,
   Trash2,
   UserRound,
-  Camera
+  Camera,
+  KeyRound,
 } from "lucide-react";
 
 import {
@@ -29,6 +25,7 @@ import {
 
 import AddressFormModal from "@/components/user/address-form-modal";
 import ProfileFormModal from "@/components/user/profile-form-modal";
+import ChangePasswordModal from "@/components/user/change-password-modal";
 
 import {
   deleteAddress,
@@ -109,6 +106,11 @@ export default function ProfilePage() {
     setProfileFormOpen,
   ] = useState(false);
 
+  const [
+    changePasswordOpen,
+    setChangePasswordOpen,
+  ] = useState(false);
+
   // Tải đồng thời hồ sơ và sổ địa chỉ của user hiện tại.
   useEffect(() => {
     const controller =
@@ -118,7 +120,7 @@ export default function ProfilePage() {
 
     async function loadProfile() {
       const accessToken =
-        localStorage.getItem(
+        sessionStorage.getItem(
           "accessToken",
         );
 
@@ -259,7 +261,7 @@ export default function ProfilePage() {
       );
 
       const accessToken =
-        localStorage.getItem(
+        sessionStorage.getItem(
           "accessToken",
         );
 
@@ -318,7 +320,7 @@ export default function ProfilePage() {
       );
 
       const accessToken =
-        localStorage.getItem(
+        sessionStorage.getItem(
           "accessToken",
         );
 
@@ -473,17 +475,29 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() =>
-                setProfileFormOpen(true)
-              }
-              className="mt-5 inline-flex cursor-pointer items-center gap-2 rounded-xl border border-[#D9CABE] px-4 py-2.5 text-sm font-semibold text-[#4A2C20] transition hover:bg-[#FAF8F5]"
-            >
-              <Pencil size={17} />
+            <div className="mt-5 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  setProfileFormOpen(true)
+                }
+                className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-[#D9CABE] px-4 py-2.5 text-sm font-semibold text-[#4A2C20] transition hover:bg-[#FAF8F5]"
+              >
+                <Pencil size={17} />
+                Chỉnh sửa hồ sơ
+              </button>
 
-              Chỉnh sửa hồ sơ
-            </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setChangePasswordOpen(true)
+                }
+                className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-[#D9CABE] px-4 py-2.5 text-sm font-semibold text-[#4A2C20] transition hover:bg-[#FAF8F5]"
+              >
+                <KeyRound size={17} />
+                Đổi mật khẩu
+              </button>
+            </div>
           </section>
 
           <section className="rounded-3xl bg-[#4A2C20] p-6 text-white shadow-sm">
@@ -509,45 +523,6 @@ export default function ProfilePage() {
             </p>
           </section>
 
-          <div className="overflow-hidden rounded-3xl border border-[#E9E1D8] bg-white shadow-sm">
-            <Link
-              href="/orders"
-              className="flex items-center justify-between border-b border-[#F0E8E0] px-5 py-4 transition hover:bg-[#FAF8F5]"
-            >
-              <span className="flex items-center gap-3 font-semibold text-[#4A423D]">
-                <ShoppingBag
-                  size={19}
-                  className="text-[#C9894B]"
-                />
-
-                Đơn hàng của tôi
-              </span>
-
-              <ChevronRight
-                size={18}
-                className="text-[#A0968F]"
-              />
-            </Link>
-
-            <Link
-              href="/menu"
-              className="flex items-center justify-between px-5 py-4 transition hover:bg-[#FAF8F5]"
-            >
-              <span className="flex items-center gap-3 font-semibold text-[#4A423D]">
-                <Star
-                  size={19}
-                  className="text-[#C9894B]"
-                />
-
-                Tiếp tục chọn món
-              </span>
-
-              <ChevronRight
-                size={18}
-                className="text-[#A0968F]"
-              />
-            </Link>
-          </div>
         </aside>
 
         <section className="rounded-3xl border border-[#E9E1D8] bg-white p-5 shadow-sm sm:p-6">
@@ -740,6 +715,30 @@ export default function ProfilePage() {
           );
         }}
       />
+
+      {changePasswordOpen && (
+        <ChangePasswordModal
+          onClose={() =>
+            setChangePasswordOpen(false)
+          }
+          onChanged={() => {
+            // Xóa phiên hiện tại để user đăng nhập lại bằng mật khẩu mới.
+            sessionStorage.removeItem(
+              "accessToken",
+            );
+
+            sessionStorage.removeItem(
+              "user",
+            );
+
+            setChangePasswordOpen(
+              false,
+            );
+
+            router.replace("/login");
+          }}
+        />
+      )}
 
       {formOpen && (
         <AddressFormModal

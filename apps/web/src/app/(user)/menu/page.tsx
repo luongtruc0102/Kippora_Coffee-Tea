@@ -4,7 +4,7 @@ import Image from "next/image";
 
 import { useEffect, useMemo, useState } from "react";
 
-import { Coffee, LoaderCircle, Search, Star } from "lucide-react";
+import { Coffee, LoaderCircle, Search, Star, Heart } from "lucide-react";
 
 import {
   getPublicCategories,
@@ -17,6 +17,7 @@ import ToastMessage from "@/components/ui/toast-message";
 import ProductOrderModal from "@/components/user/product-order-modal";
 import { getProductReviewSummaries } from "@/services/review.service";
 import type { ProductReviewSummary } from "@/types/review";
+import { useFavorites } from "@/hooks/use-favorites";
 
 export default function MenuPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -51,6 +52,13 @@ export default function MenuPage() {
       ProductReviewSummary
     >
   >({});
+
+  const {
+    loadingFavorites,
+    updatingProductId,
+    isFavorite,
+    toggleFavorite,
+  } = useFavorites();
 
   useEffect(() => {
     async function loadMenu() {
@@ -289,7 +297,43 @@ export default function MenuPage() {
                 key={product.id}
                 className="group flex h-full flex-col overflow-hidden rounded-2xl border border-[#E9E1D8] bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-md"
               >
-                <div className="aspect-square overflow-hidden bg-[#F3E9DE] sm:aspect-[4/3]">
+                <div className="relative aspect-square overflow-hidden bg-[#F3E9DE] sm:aspect-[4/3]">
+                  <button
+                    type="button"
+                    disabled={
+                      loadingFavorites ||
+                      updatingProductId !== null
+                    }
+                    aria-label={
+                      isFavorite(product.id)
+                        ? `Bỏ yêu thích ${product.name}`
+                        : `Yêu thích ${product.name}`
+                    }
+                    title={
+                      isFavorite(product.id)
+                        ? "Bỏ yêu thích"
+                        : "Thêm vào yêu thích"
+                    }
+                    onClick={() =>
+                      void toggleFavorite(
+                        product.id,
+                      )
+                    }
+                    className={`absolute right-3 top-3 z-10 flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border shadow-sm backdrop-blur transition disabled:cursor-wait disabled:opacity-60 ${
+                      isFavorite(product.id)
+                        ? "border-[#E7A35B] bg-[#FFF4E8] text-[#D9772B]"
+                        : "border-white/80 bg-white/90 text-[#6B625C] hover:text-[#D9772B]"
+                    }`}
+                  >
+                    <Heart
+                      size={20}
+                      className={
+                        isFavorite(product.id)
+                          ? "fill-current"
+                          : ""
+                      }
+                    />
+                  </button>
                   {imageUrl ? (
                     <Image
                       unoptimized
@@ -382,7 +426,32 @@ export default function MenuPage() {
       <ProductOrderModal
         open={selectedProduct !== null}
         product={selectedProduct}
-        onClose={() => setSelectedProduct(null)}
+        isFavorite={
+          selectedProduct
+            ? isFavorite(
+                selectedProduct.id,
+              )
+            : false
+        }
+        favoriteUpdating={
+          loadingFavorites ||
+          (selectedProduct
+            ? updatingProductId ===
+              selectedProduct.id
+            : false)
+        }
+        onToggleFavorite={() => {
+          if (!selectedProduct) {
+            return;
+          }
+
+          void toggleFavorite(
+            selectedProduct.id,
+          );
+        }}
+        onClose={() =>
+          setSelectedProduct(null)
+        }
       />
     </div>
   );

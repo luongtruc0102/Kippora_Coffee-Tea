@@ -1,47 +1,34 @@
 'use client';
 
+import { FormEvent, useState } from 'react';
+import { Eye, EyeOff, LockKeyhole, Mail, UserRound } from 'lucide-react';
 import Link from 'next/link';
-import {
-  FormEvent,
-  useState,
-} from 'react';
 import { useRouter } from 'next/navigation';
 
-import BrandLogo from '@/components/brand/brand-logo';
-import ToastMessage from '@/components/ui/toast-message';
+import AuthShell from '@/components/auth/auth-shell';
 import { useAppToast } from '@/components/ui/app-toast-provider';
+import ToastMessage from '@/components/ui/toast-message';
 import { register } from '@/services/auth.service';
 
 export default function RegisterPage() {
   const router = useRouter();
   const { showToast } = useAppToast();
 
-  const [fullName, setFullName] =
-    useState('');
-  const [email, setEmail] =
-    useState('');
-  const [password, setPassword] =
-    useState('');
-  const [
-    confirmPassword,
-    setConfirmPassword,
-  ] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const [error, setError] =
-    useState('');
-  const [submitting, setSubmitting] =
-    useState(false);
-
-  async function handleSubmit(
-    event: FormEvent<HTMLFormElement>,
-  ) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
 
-    const normalizedName =
-      fullName.trim();
-    const normalizedEmail =
-      email.trim().toLowerCase();
+    const normalizedName = fullName.trim();
+    const normalizedEmail = email.trim().toLowerCase();
 
     if (!normalizedName) {
       setError('Vui lòng nhập họ và tên');
@@ -49,16 +36,12 @@ export default function RegisterPage() {
     }
 
     if (password.length < 6) {
-      setError(
-        'Mật khẩu phải có ít nhất 6 ký tự',
-      );
+      setError('Mật khẩu phải có ít nhất 6 ký tự');
       return;
     }
 
     if (password !== confirmPassword) {
-      setError(
-        'Mật khẩu nhập lại không khớp',
-      );
+      setError('Mật khẩu nhập lại không khớp');
       return;
     }
 
@@ -71,11 +54,7 @@ export default function RegisterPage() {
         password,
       });
 
-      showToast(
-        'Đăng ký thành công. Anh có thể đăng nhập ngay.',
-        'success',
-      );
-
+      showToast('Đăng ký thành công. Anh có thể đăng nhập ngay.', 'success');
       router.replace('/login');
     } catch (error) {
       setError(
@@ -89,126 +68,138 @@ export default function RegisterPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#FAF8F5] px-4 py-10">
-      <div className="w-full max-w-md rounded-3xl border border-[#E9E1D8] bg-white p-8 shadow-sm">
-        <BrandLogo
-          variant="stackedFull"
-          priority
-          sizes="190px"
-          className="mx-auto h-auto w-[190px]"
-        />
-
-        <h1 className="mt-5 text-center text-2xl font-bold text-[#1F1B18]">
-          Tạo tài khoản
-        </h1>
-
-        <p className="mt-2 text-center text-sm text-[#78866B]">
-          Đăng ký để đặt món và theo dõi đơn hàng.
-        </p>
-
-        <form
-          onSubmit={handleSubmit}
-          className="mt-6 space-y-4"
-        >
-          <div>
-            <label className="mb-2 block text-sm font-medium text-[#1F1B18]">
-              Họ và tên
-            </label>
-
+    <AuthShell
+      eyebrow="Bắt đầu cùng Kippora"
+      title="Tạo tài khoản"
+      description="Đăng ký để đặt món, lưu địa chỉ và theo dõi đơn hàng dễ dàng hơn."
+    >
+      <form onSubmit={handleSubmit} className="space-y-2.5">
+        <div>
+          <label className="mb-1 block text-sm font-medium text-[#1F1B18]">
+            Họ và tên
+          </label>
+          <div className="relative">
+            <UserRound
+              size={18}
+              className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#A69A90]"
+            />
             <input
               type="text"
               value={fullName}
-              onChange={(event) =>
-                setFullName(event.target.value)
-              }
+              onChange={(event) => setFullName(event.target.value)}
               placeholder="Nguyễn Văn A"
               autoComplete="name"
               required
-              className="w-full rounded-xl border border-[#DDD4CA] px-4 py-3 outline-none transition focus:border-[#C9894B] focus:ring-2 focus:ring-[#C9894B]/20"
+              className="w-full rounded-2xl border border-[#DED5CC] bg-[#FCFAF8] py-2.5 pl-12 pr-4 outline-none transition placeholder:text-[#B1A79F] hover:border-[#CBBBAE] focus:border-[#C9894B] focus:bg-white focus:ring-4 focus:ring-[#C9894B]/10"
             />
           </div>
+        </div>
 
-          <div>
-            <label className="mb-2 block text-sm font-medium text-[#1F1B18]">
-              Email
-            </label>
-
+        <div>
+          <label className="mb-1 block text-sm font-medium text-[#1F1B18]">
+            Email
+          </label>
+          <div className="relative">
+            <Mail
+              size={18}
+              className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#A69A90]"
+            />
             <input
               type="email"
               value={email}
-              onChange={(event) =>
-                setEmail(event.target.value)
-              }
+              onChange={(event) => setEmail(event.target.value)}
               placeholder="email@example.com"
               autoComplete="email"
               required
-              className="w-full rounded-xl border border-[#DDD4CA] px-4 py-3 outline-none transition focus:border-[#C9894B] focus:ring-2 focus:ring-[#C9894B]/20"
+              className="w-full rounded-2xl border border-[#DED5CC] bg-[#FCFAF8] py-2.5 pl-12 pr-4 outline-none transition placeholder:text-[#B1A79F] hover:border-[#CBBBAE] focus:border-[#C9894B] focus:bg-white focus:ring-4 focus:ring-[#C9894B]/10"
             />
           </div>
+        </div>
 
-          <div>
-            <label className="mb-2 block text-sm font-medium text-[#1F1B18]">
-              Mật khẩu
-            </label>
-
+        <div>
+          <label className="mb-1 block text-sm font-medium text-[#1F1B18]">
+            Mật khẩu
+          </label>
+          <div className="relative">
+            <LockKeyhole
+              size={18}
+              className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#A69A90]"
+            />
             <input
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               value={password}
-              onChange={(event) =>
-                setPassword(event.target.value)
-              }
+              onChange={(event) => setPassword(event.target.value)}
               placeholder="Tối thiểu 6 ký tự"
               autoComplete="new-password"
               minLength={6}
               required
-              className="w-full rounded-xl border border-[#DDD4CA] px-4 py-3 outline-none transition focus:border-[#C9894B] focus:ring-2 focus:ring-[#C9894B]/20"
+              className="w-full rounded-2xl border border-[#DED5CC] bg-[#FCFAF8] py-2.5 pl-12 pr-12 outline-none transition placeholder:text-[#B1A79F] hover:border-[#CBBBAE] focus:border-[#C9894B] focus:bg-white focus:ring-4 focus:ring-[#C9894B]/10"
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword((current) => !current)}
+              aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+              className="absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-xl text-[#8E8177] transition hover:bg-[#F2E8DE] hover:text-[#4A2C20]"
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
           </div>
+        </div>
 
-          <div>
-            <label className="mb-2 block text-sm font-medium text-[#1F1B18]">
-              Nhập lại mật khẩu
-            </label>
-
+        <div>
+          <label className="mb-1 block text-sm font-medium text-[#1F1B18]">
+            Nhập lại mật khẩu
+          </label>
+          <div className="relative">
+            <LockKeyhole
+              size={18}
+              className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#A69A90]"
+            />
             <input
-              type="password"
+              type={showConfirmPassword ? 'text' : 'password'}
               value={confirmPassword}
-              onChange={(event) =>
-                setConfirmPassword(
-                  event.target.value,
-                )
-              }
+              onChange={(event) => setConfirmPassword(event.target.value)}
               placeholder="Nhập lại mật khẩu"
               autoComplete="new-password"
               minLength={6}
               required
-              className="w-full rounded-xl border border-[#DDD4CA] px-4 py-3 outline-none transition focus:border-[#C9894B] focus:ring-2 focus:ring-[#C9894B]/20"
+              className="w-full rounded-2xl border border-[#DED5CC] bg-[#FCFAF8] py-2.5 pl-12 pr-12 outline-none transition placeholder:text-[#B1A79F] hover:border-[#CBBBAE] focus:border-[#C9894B] focus:bg-white focus:ring-4 focus:ring-[#C9894B]/10"
             />
+            <button
+              type="button"
+              onClick={() => setShowConfirmPassword((current) => !current)}
+              aria-label={
+                showConfirmPassword
+                  ? 'Ẩn mật khẩu nhập lại'
+                  : 'Hiện mật khẩu nhập lại'
+              }
+              className="absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-xl text-[#8E8177] transition hover:bg-[#F2E8DE] hover:text-[#4A2C20]"
+            >
+              {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
           </div>
+        </div>
 
-          <ToastMessage message={error} />
+        <ToastMessage message={error} />
 
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full rounded-xl bg-[#4A2C20] px-4 py-3 font-semibold text-white transition hover:bg-[#3B2319] disabled:cursor-wait disabled:opacity-60"
-          >
-            {submitting
-              ? 'Đang đăng ký...'
-              : 'Đăng ký'}
-          </button>
-        </form>
+        <button
+          type="submit"
+          disabled={submitting}
+          className="w-full rounded-2xl bg-gradient-to-r from-[#4A2C20] to-[#6A3B27] px-4 py-2.5 font-semibold text-white shadow-lg shadow-[#4A2C20]/15 transition hover:-translate-y-0.5 hover:shadow-xl disabled:cursor-wait disabled:opacity-60 disabled:hover:translate-y-0"
+        >
+          {submitting ? 'Đang đăng ký...' : 'Đăng ký'}
+        </button>
+      </form>
 
-        <p className="mt-5 text-center text-sm text-[#78866B]">
-          Đã có tài khoản?{' '}
-          <Link
-            href="/login"
-            className="font-semibold text-[#C2763D] hover:text-[#9A5D2E]"
-          >
-            Đăng nhập
-          </Link>
-        </p>
-      </div>
-    </main>
+      <p className="mt-3 text-center text-sm text-[#78866B]">
+        Đã có tài khoản?{' '}
+        <Link
+          href="/login"
+          className="font-semibold text-[#C2763D] hover:text-[#9A5D2E]"
+        >
+          Đăng nhập
+        </Link>
+      </p>
+    </AuthShell>
   );
 }

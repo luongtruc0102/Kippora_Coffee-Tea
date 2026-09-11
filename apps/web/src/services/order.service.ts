@@ -3,6 +3,7 @@ import type {
   Order,
   OrderStatus,
   PaymentMethod,
+  RefundMethod,
   ReorderOrderResult,
 } from "@/types/order";
 
@@ -100,6 +101,35 @@ export async function updateOrderStatus(
   }
 
   return data;
+}
+
+export type CancelManagedOrderInput = {
+  reason: string;
+  refundMethod?: RefundMethod;
+};
+
+// Hủy đơn quản lý; backend tự hoàn toàn bộ nếu giao dịch đã thanh toán.
+export async function cancelManagedOrder(
+  accessToken: string,
+  orderId: number,
+  input: CancelManagedOrderInput,
+): Promise<Order> {
+  const response = await fetch(
+    `${getApiUrl()}/orders/management/${orderId}/cancel`,
+    {
+      method: "PATCH",
+      headers: getHeaders(accessToken),
+      body: JSON.stringify(input),
+    },
+  );
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message = Array.isArray(data?.message)
+      ? data.message.join(", ")
+      : data?.message;
+    throw new Error(message || "Không thể hủy đơn hàng");
+  }
+  return data as Order;
 }
 
 export type RouteCoordinate = {
@@ -241,6 +271,76 @@ export async function checkoutOrder(
       : data.message;
 
     throw new Error(message || "Không thể tạo đơn hàng");
+  }
+
+  return data;
+}
+
+export type CreatePosOrderInput = {
+  items: Array<{
+    productId: number;
+    variantId: number;
+    quantity: number;
+    toppingIds?: number[];
+  }>;
+  customerName?: string;
+  customerPhone?: string;
+  paymentMethod: "CASH" | "BANK_TRANSFER";
+  loyaltyPointsToUse?: number;
+  note?: string;
+};
+
+export type PosCustomerLookupResult = {
+  found: boolean;
+  source: "USER" | "POS_CUSTOMER" | null;
+  fullName: string | null;
+  phone: string;
+  loyaltyPoints: number;
+};
+
+// Tìm tên và điểm khách tại quầy theo số điện thoại.
+export async function lookupPosCustomer(
+  accessToken: string,
+  phone: string,
+  signal?: AbortSignal,
+): Promise<PosCustomerLookupResult> {
+  const response = await fetch(
+    `${getApiUrl()}/orders/pos/customers/lookup?phone=${encodeURIComponent(phone.trim())}`,
+    {
+      headers: getHeaders(accessToken),
+      cache: "no-store",
+      signal,
+    },
+  );
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const message = Array.isArray(data?.message)
+      ? data.message.join(", ")
+      : data?.message;
+    throw new Error(message || "Không thể tìm thông tin khách hàng");
+  }
+
+  return data;
+}
+
+// Trưởng chi nhánh tạo hóa đơn trực tiếp tại quầy, không dùng Cart của user.
+export async function createPosOrder(
+  accessToken: string,
+  input: CreatePosOrderInput,
+): Promise<Order> {
+  const response = await fetch(`${getApiUrl()}/orders/pos`, {
+    method: "POST",
+    headers: getHeaders(accessToken),
+    body: JSON.stringify(input),
+  });
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const message = Array.isArray(data?.message)
+      ? data.message.join(", ")
+      : data?.message;
+    throw new Error(message || "Không thể tạo hóa đơn POS");
   }
 
   return data;

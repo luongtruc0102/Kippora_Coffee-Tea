@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 
-import { Check, Coffee, Minus, Plus, ShoppingCart, X } from "lucide-react";
+import { Check, Coffee, Minus, Plus, ShoppingCart, X, Heart } from "lucide-react";
 
 import { useEffect, useMemo, useState } from "react";
 
@@ -21,10 +21,21 @@ type Props = {
   open: boolean;
   product: Product | null;
 
+  isFavorite: boolean;
+  favoriteUpdating: boolean;
+
+  onToggleFavorite: () => void;
   onClose: () => void;
 };
 
-export default function ProductOrderModal({ open, product, onClose }: Props) {
+export default function ProductOrderModal({
+  open,
+  product,
+  isFavorite,
+  favoriteUpdating,
+  onToggleFavorite,
+  onClose,
+}: Props) {
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(
     null,
   );
@@ -129,9 +140,9 @@ export default function ProductOrderModal({ open, product, onClose }: Props) {
     try {
       setError("");
 
-      const accessToken = localStorage.getItem("accessToken");
+      const accessToken = sessionStorage.getItem("accessToken");
 
-      const storedUser = localStorage.getItem("user");
+      const storedUser = sessionStorage.getItem("user");
 
       if (!accessToken || !storedUser) {
         // router.push('/login');
@@ -141,8 +152,8 @@ export default function ProductOrderModal({ open, product, onClose }: Props) {
 
       const user = JSON.parse(storedUser);
 
-      if (user.role !== "USER") {
-        throw new Error("Chỉ tài khoản khách hàng mới có thể đặt món");
+      if (user.role !== "USER" && user.role !== "STAFF") {
+        throw new Error("Tài khoản này không thể đặt món");
       }
 
       if (!product || !selectedVariant) {
@@ -214,6 +225,36 @@ export default function ProductOrderModal({ open, product, onClose }: Props) {
           >
             <X size={20} />
           </button>
+
+          <button
+            type="button"
+            disabled={favoriteUpdating}
+            aria-label={
+              isFavorite
+                ? "Bỏ yêu thích"
+                : "Thêm vào yêu thích"
+            }
+            title={
+              isFavorite
+                ? "Bỏ yêu thích"
+                : "Thêm vào yêu thích"
+            }
+            onClick={onToggleFavorite}
+            className={`absolute right-16 top-4 flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border shadow-sm backdrop-blur transition disabled:cursor-wait disabled:opacity-60 ${
+              isFavorite
+                ? "border-[#E7A35B] bg-[#FFF4E8] text-[#D9772B]"
+                : "border-white/80 bg-white/95 text-[#6B625C] hover:text-[#D9772B]"
+            }`}
+          >
+            <Heart
+              size={20}
+              className={
+                isFavorite
+                  ? "fill-current"
+                  : ""
+              }
+            />
+          </button>
         </div>
 
         <div className="p-5 sm:p-6">
@@ -281,6 +322,7 @@ export default function ProductOrderModal({ open, product, onClose }: Props) {
               <div className="mt-3 space-y-2">
                 {product.toppings.map((relation) => {
                   const topping = relation.topping;
+                  const toppingImageUrl = getImageUrl(topping.imageUrl);
 
                   const active = selectedToppingIds.includes(topping.id);
 
@@ -296,6 +338,21 @@ export default function ProductOrderModal({ open, product, onClose }: Props) {
                       }`}
                     >
                       <div className="flex items-center gap-3">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-[#E9E1D8] bg-[#F7F2EC] text-[#C9894B]">
+                          {toppingImageUrl ? (
+                            <Image
+                              unoptimized
+                              src={toppingImageUrl}
+                              alt={topping.name}
+                              width={48}
+                              height={48}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <Coffee size={19} />
+                          )}
+                        </div>
+
                         <div
                           className={`flex h-5 w-5 items-center justify-center rounded-md border ${
                             active

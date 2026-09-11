@@ -12,6 +12,8 @@
 
 # testing
 /coverage
+/tmp/pdfs/
+/tmp/spreadsheets/
 
 # next.js
 /.next/

@@ -1,14 +1,21 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
+import Link from "next/link";
 
 import {
   Bell,
+  Banknote,
+  CalendarDays,
+  ClipboardCheck,
+  ClipboardList,
   Boxes,
+  Building2,
   Coffee,
   CreditCard,
   Images,
+  HandCoins,
   LayoutDashboard,
+  Landmark,
   MessagesSquare,
   Package,
   PackagePlus,
@@ -18,16 +25,15 @@ import {
   Star,
   TicketPercent,
   Truck,
+  UserCog,
   Users,
   Warehouse,
   X,
-} from 'lucide-react';
+} from "lucide-react";
 
-import {
-  usePathname,
-} from 'next/navigation';
+import { usePathname } from "next/navigation";
 
-import BrandLogo from '@/components/brand/brand-logo';
+import BrandLogo from "@/components/brand/brand-logo";
 
 type Props = {
   open: boolean;
@@ -40,149 +46,190 @@ const menuGroups = [
 
     items: [
       {
-        label: 'Dashboard',
-        href: '/admin',
+        label: "Dashboard",
+        href: "/admin",
         icon: LayoutDashboard,
       },
     ],
   },
 
   {
-    label: 'Bán hàng',
+    label: "Bán hàng",
 
     items: [
       {
-        label: 'Đơn hàng',
-        href: '/admin/orders',
+        label: "Đơn hàng",
+        href: "/admin/orders",
         icon: ShoppingBag,
       },
       {
-        label: 'Thanh toán',
-        href: '/admin/payments',
+        label: "Thanh toán",
+        href: "/admin/payments",
         icon: CreditCard,
       },
     ],
   },
 
   {
-    label: 'Sản phẩm',
+    label: "Sản phẩm",
 
     items: [
       {
-        label: 'Sản phẩm',
-        href: '/admin/products',
+        label: "Sản phẩm",
+        href: "/admin/products",
         icon: Package,
       },
       {
-        label: 'Danh mục',
-        href: '/admin/categories',
+        label: "Danh mục",
+        href: "/admin/categories",
         icon: Boxes,
       },
       {
-        label: 'Topping',
-        href: '/admin/toppings',
+        label: "Topping",
+        href: "/admin/toppings",
         icon: Coffee,
       },
     ],
   },
 
   {
-    label: 'Khuyến mãi',
+    label: "Khuyến mãi",
 
     items: [
       {
-        label: 'Voucher',
-        href: '/admin/vouchers',
+        label: "Voucher",
+        href: "/admin/vouchers",
         icon: TicketPercent,
       },
     ],
   },
 
   {
-    label: 'Kho hàng',
+    label: "Kho hàng",
 
     items: [
       {
-        label: 'Tồn kho',
-        href: '/admin/inventory',
+        label: "Tồn kho",
+        href: "/admin/inventory",
         icon: Warehouse,
       },
       {
-        label: 'Nhập kho',
-        href: '/admin/stock-in',
+        label: "Lô & hạn dùng",
+        href: "/admin/inventory-lots",
+        icon: CalendarDays,
+      },
+      {
+        label: "Nhập kho",
+        href: "/admin/stock-in",
         icon: PackagePlus,
       },
       {
-        label: 'Nhà cung cấp',
-        href: '/admin/suppliers',
+        label: "Đặt hàng NCC",
+        href: "/admin/purchase-orders",
+        icon: ClipboardList,
+      },
+      {
+        label: "Kiểm kê kho",
+        href: "/admin/inventory-counts",
+        icon: ClipboardCheck,
+      },
+      {
+        label: "Nhà cung cấp",
+        href: "/admin/suppliers",
         icon: Truck,
       },
     ],
   },
 
   {
-    label: 'Khách hàng',
+    label: "Tài khoản",
 
     items: [
       {
-        label: 'Người dùng',
-        href: '/admin/users',
+        label: "Khách hàng",
+        href: "/admin/users",
         icon: Users,
       },
       {
-        label: 'Đánh giá',
-        href: '/admin/reviews',
+        label: "Nhân viên",
+        href: "/admin/employees",
+        icon: UserCog,
+      },
+      {
+        label: "Lịch làm",
+        href: "/admin/schedules",
+        icon: CalendarDays,
+      },
+      {
+        label: "Bảng lương",
+        href: "/admin/payroll",
+        icon: Banknote,
+      },
+      {
+        label: "Chi phí",
+        href: "/admin/expenses",
+        icon: HandCoins,
+      },
+      {
+        label: "Chốt quỹ",
+        href: "/admin/cash-reconciliation",
+        icon: Landmark,
+      },
+      {
+        label: "Đánh giá",
+        href: "/admin/reviews",
         icon: Star,
       },
       {
-        label: 'Chat / CSKH',
-        href: '/admin/chat',
+        label: "Chat / CSKH",
+        href: "/admin/chat",
         icon: MessagesSquare,
       },
     ],
   },
 
   {
-    label: 'Nội dung',
+    label: "Nội dung",
 
     items: [
       {
-        label: 'Banner',
-        href: '/admin/banners',
+        label: "Banner",
+        href: "/admin/banners",
         icon: Images,
       },
       {
-        label: 'Thông báo',
-        href: '/admin/notifications',
+        label: "Thông báo",
+        href: "/admin/notifications",
         icon: Bell,
       },
     ],
   },
 
   {
-    label: 'Hệ thống',
+    label: "Hệ thống",
 
     items: [
       {
-        label: 'Cài đặt',
-        href: '/admin/settings',
+        label: "Chi nhánh",
+        href: "/admin/branches",
+        icon: Building2,
+      },
+      {
+        label: "Cài đặt",
+        href: "/admin/settings",
         icon: Settings,
       },
       {
-        label: 'Nhật ký hoạt động',
-        href: '/admin/activity-logs',
+        label: "Nhật ký hoạt động",
+        href: "/admin/activity-logs",
         icon: ScrollText,
       },
     ],
   },
 ];
 
-export default function AdminSidebar({
-  open,
-  onClose,
-}: Props) {
-  const pathname =
-    usePathname();
+export default function AdminSidebar({ open, onClose }: Props) {
+  const pathname = usePathname();
 
   return (
     <>
@@ -197,9 +244,7 @@ export default function AdminSidebar({
 
       <aside
         className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-[#E9E1D8] bg-white transition-transform duration-200 lg:translate-x-0 ${
-          open
-            ? 'translate-x-0'
-            : '-translate-x-full'
+          open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
         <div className="flex h-16 items-center justify-between border-b border-[#E9E1D8] px-6">
@@ -219,85 +264,55 @@ export default function AdminSidebar({
 
           <button
             type="button"
-            onClick={
-              onClose
-            }
+            onClick={onClose}
             className="flex h-9 w-9 items-center justify-center rounded-lg text-[#78866B] transition hover:bg-[#FAF8F5] lg:hidden"
           >
-            <X
-              size={19}
-            />
+            <X size={19} />
           </button>
         </div>
 
         <nav className="flex-1 overflow-y-auto px-4 py-4">
           <div className="space-y-5">
-            {menuGroups.map(
-              (group, groupIndex) => (
-                <div key={groupIndex}>
-                  {group.label && (
-                    <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#A0968F]">
-                      {group.label}
-                    </p>
-                  )}
+            {menuGroups.map((group, groupIndex) => (
+              <div key={groupIndex}>
+                {group.label && (
+                  <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#A0968F]">
+                    {group.label}
+                  </p>
+                )}
 
-                  <ul className="space-y-1">
-                    {group.items.map(
-                      (item) => {
-                        const Icon =
-                          item.icon;
+                <ul className="space-y-1">
+                  {group.items.map((item) => {
+                    const Icon = item.icon;
 
-                        const isActive =
-                          item.href ===
-                          '/admin'
-                            ? pathname ===
-                              '/admin'
-                            : pathname.startsWith(
-                                item.href,
-                              );
+                    const isActive =
+                      item.href === "/admin"
+                        ? pathname === "/admin"
+                        : item.href === "/admin/inventory"
+                          ? pathname === item.href
+                          : pathname.startsWith(item.href);
 
-                        return (
-                          <li
-                            key={
-                              item.href
-                            }
-                          >
-                            <Link
-                              href={
-                                item.href
-                              }
-                              onClick={
-                                onClose
-                              }
-                              className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
-                                isActive
-                                  ? 'bg-[#F3E9DE] text-[#4A2C20]'
-                                  : 'text-[#5E5650] hover:bg-[#FAF8F5] hover:text-[#1F1B18]'
-                              }`}
-                            >
-                              <Icon
-                                size={18}
-                                strokeWidth={
-                                  isActive
-                                    ? 2.3
-                                    : 2
-                                }
-                              />
+                    return (
+                      <li key={item.href}>
+                        <Link
+                          href={item.href}
+                          onClick={onClose}
+                          className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
+                            isActive
+                              ? "bg-[#F3E9DE] text-[#4A2C20]"
+                              : "text-[#5E5650] hover:bg-[#FAF8F5] hover:text-[#1F1B18]"
+                          }`}
+                        >
+                          <Icon size={18} strokeWidth={isActive ? 2.3 : 2} />
 
-                              <span>
-                                {
-                                  item.label
-                                }
-                              </span>
-                            </Link>
-                          </li>
-                        );
-                      },
-                    )}
-                  </ul>
-                </div>
-              ),
-            )}
+                          <span>{item.label}</span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
           </div>
         </nav>
 

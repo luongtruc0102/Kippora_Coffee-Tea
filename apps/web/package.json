@@ -6,9 +6,16 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:payment-report": "node scripts/test-payment-report.cjs",
+    "test:payment-excel": "node scripts/test-payment-excel.cjs",
+    "test:employee-work-time": "node scripts/test-employee-work-time.cjs"
   },
   "dependencies": {
+    "exceljs": "4.4.0",
+    "html2canvas-pro": "^2.4.0",
+    "html2pdf.js": "^0.14.0",
+    "jspdf": "^4.2.1",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.31.0",
     "next": "16.3.0",

@@ -36,12 +36,12 @@ export default function AdminLayout({
       }
 
       const accessToken =
-        localStorage.getItem(
+        sessionStorage.getItem(
           'accessToken',
         );
 
       const storedUser =
-        localStorage.getItem(
+        sessionStorage.getItem(
           'user',
         );
 
@@ -65,11 +65,11 @@ export default function AdminLayout({
           user.role !==
           'ADMIN'
         ) {
-          localStorage.removeItem(
+          sessionStorage.removeItem(
             'accessToken',
           );
 
-          localStorage.removeItem(
+          sessionStorage.removeItem(
             'user',
           );
 
@@ -82,11 +82,11 @@ export default function AdminLayout({
 
         setAuthorized(true);
       } catch {
-        localStorage.removeItem(
+        sessionStorage.removeItem(
           'accessToken',
         );
 
-        localStorage.removeItem(
+        sessionStorage.removeItem(
           'user',
         );
 

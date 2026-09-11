@@ -8,6 +8,7 @@ import {
   DashboardPaymentsService,
   DashboardVouchersService,
   DashboardCustomersService,
+  DashboardOperationsService,
 } from './services/dashboard.index';
 
 @Module({
@@ -21,6 +22,7 @@ import {
     DashboardPaymentsService,
     DashboardVouchersService,
     DashboardCustomersService,
+    DashboardOperationsService,
   ],
 })
 export class DashboardModule {}

@@ -11,51 +11,64 @@ export class DashboardProductsService {
   async getTopProducts(
     limit = 5,
     period: DashboardPeriod = '7D',
+    branchId?: number,
+    from?: string,
+    to?: string,
   ) {
-    const safeLimit = Math.min(
-      Math.max(limit, 1),
-      20,
-    );
+    const safeLimit = Math.min(Math.max(limit, 1), 20);
 
-    const { startDate, endDate } =
-      getDashboardPeriodRange(period);
+    const { startDate, endDate } = getDashboardPeriodRange(period, from, to);
 
-    const products =
-      await this.prisma.orderItem.groupBy({
-        by: ['productId', 'productName'],
+    const products = await this.prisma.orderItem.groupBy({
+      by: ['productId', 'productName'],
 
-        where: {
-          order: {
-            status: 'COMPLETED',
-            createdAt: {
-              gte: startDate,
-              lte: endDate,
-            },
+      where: {
+        order: {
+          ...(branchId ? { branchId } : {}),
+          status: 'COMPLETED',
+          createdAt: {
+            gte: startDate,
+            lte: endDate,
           },
         },
+      },
 
+      _sum: {
+        quantity: true,
+        lineTotal: true,
+      },
+
+      orderBy: {
         _sum: {
-          quantity: true,
-          lineTotal: true,
+          quantity: 'desc',
         },
+      },
 
-        orderBy: {
-          _sum: {
-            quantity: 'desc',
-          },
+      take: safeLimit,
+    });
+
+    // OrderItem lưu snapshot tên sản phẩm, còn ảnh luôn lấy từ sản phẩm hiện tại.
+    const productImages = await this.prisma.product.findMany({
+      where: {
+        id: {
+          in: products.map((product) => product.productId),
         },
-
-        take: safeLimit,
-      });
+      },
+      select: {
+        id: true,
+        imageUrl: true,
+      },
+    });
+    const imageByProductId = new Map(
+      productImages.map((product) => [product.id, product.imageUrl]),
+    );
 
     return products.map((product) => ({
       productId: product.productId,
       productName: product.productName,
-      quantitySold:
-        product._sum.quantity ?? 0,
-      revenue: Number(
-        product._sum.lineTotal ?? 0,
-      ),
+      imageUrl: imageByProductId.get(product.productId) ?? null,
+      quantitySold: product._sum.quantity ?? 0,
+      revenue: Number(product._sum.lineTotal ?? 0),
     }));
   }
 
@@ -63,49 +76,64 @@ export class DashboardProductsService {
   async getTopToppings(
     limit = 5,
     period: DashboardPeriod = '7D',
+    branchId?: number,
+    from?: string,
+    to?: string,
   ) {
-    const safeLimit = Math.min(
-      Math.max(limit, 1),
-      20,
-    );
+    const safeLimit = Math.min(Math.max(limit, 1), 20);
 
-    const { startDate, endDate } =
-      getDashboardPeriodRange(period);
+    const { startDate, endDate } = getDashboardPeriodRange(period, from, to);
 
-    const toppings =
-      await this.prisma.orderItemTopping.groupBy({
-        by: ['toppingId', 'toppingName'],
+    const toppings = await this.prisma.orderItemTopping.groupBy({
+      by: ['toppingId', 'toppingName'],
 
-        where: {
-          orderItem: {
-            order: {
-              status: 'COMPLETED',
-              createdAt: {
-                gte: startDate,
-                lte: endDate,
-              },
+      where: {
+        orderItem: {
+          order: {
+            ...(branchId ? { branchId } : {}),
+            status: 'COMPLETED',
+            createdAt: {
+              gte: startDate,
+              lte: endDate,
             },
           },
         },
+      },
 
+      _count: {
+        toppingId: true,
+      },
+
+      orderBy: {
         _count: {
-          toppingId: true,
+          toppingId: 'desc',
         },
+      },
 
-        orderBy: {
-          _count: {
-            toppingId: 'desc',
-          },
+      take: safeLimit,
+    });
+
+    // Bổ sung ảnh hiện tại của topping cho danh sách phổ biến trên dashboard.
+    const toppingImages = await this.prisma.topping.findMany({
+      where: {
+        id: {
+          in: toppings.map((topping) => topping.toppingId),
         },
-
-        take: safeLimit,
-      });
+      },
+      select: {
+        id: true,
+        imageUrl: true,
+      },
+    });
+    const imageByToppingId = new Map(
+      toppingImages.map((topping) => [topping.id, topping.imageUrl]),
+    );
 
     return toppings.map((topping) => ({
       toppingId: topping.toppingId,
       toppingName: topping.toppingName,
-      selectedCount:
-        topping._count.toppingId,
+      imageUrl: imageByToppingId.get(topping.toppingId) ?? null,
+      selectedCount: topping._count.toppingId,
     }));
   }
 }

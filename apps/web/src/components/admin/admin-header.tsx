@@ -15,6 +15,8 @@ import {
   useRouter,
 } from 'next/navigation';
 
+import NotificationBell from '@/components/user/notification-bell';
+
 type CurrentUser = {
   id: number;
   email: string;
@@ -48,7 +50,7 @@ export default function AdminHeader({
       }
 
       const storedUser =
-        localStorage.getItem(
+        sessionStorage.getItem(
           'user',
         );
 
@@ -67,11 +69,11 @@ export default function AdminHeader({
         );
       } catch {
         // Xóa phiên nếu localStorage không hợp lệ
-        localStorage.removeItem(
+        sessionStorage.removeItem(
           'user',
         );
 
-        localStorage.removeItem(
+        sessionStorage.removeItem(
           'accessToken',
         );
 
@@ -87,11 +89,11 @@ export default function AdminHeader({
   }, [router]);
 
   function handleLogout() {
-    localStorage.removeItem(
+    sessionStorage.removeItem(
       'accessToken',
     );
 
-    localStorage.removeItem(
+    sessionStorage.removeItem(
       'user',
     );
 
@@ -127,6 +129,8 @@ export default function AdminHeader({
       </div>
 
       <div className="flex items-center gap-3">
+        <NotificationBell />
+
         <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F3E9DE] text-[#4A2C20]">
           <UserRound
             size={19}

@@ -80,7 +80,7 @@ export default function CartPage() {
         setLoading(true);
         setError("");
 
-        const accessToken = localStorage.getItem("accessToken");
+        const accessToken = sessionStorage.getItem("accessToken");
 
         if (!accessToken) {
           router.replace("/login?redirect=/cart");
@@ -172,7 +172,7 @@ export default function CartPage() {
       setError("");
       setUpdatingId(item.id);
 
-      const accessToken = localStorage.getItem("accessToken");
+      const accessToken = sessionStorage.getItem("accessToken");
 
       if (!accessToken) {
         router.replace("/login?redirect=/cart");
@@ -201,7 +201,7 @@ export default function CartPage() {
       setError("");
       setUpdatingId(itemId);
 
-      const accessToken = localStorage.getItem("accessToken");
+      const accessToken = sessionStorage.getItem("accessToken");
 
       if (!accessToken) {
         return;
@@ -227,7 +227,7 @@ export default function CartPage() {
       setError("");
       setUpdatingId(-1);
 
-      const accessToken = localStorage.getItem("accessToken");
+      const accessToken = sessionStorage.getItem("accessToken");
 
       if (!accessToken) {
         return;

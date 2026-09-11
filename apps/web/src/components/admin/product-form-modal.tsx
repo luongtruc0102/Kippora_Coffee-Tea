@@ -221,7 +221,7 @@ export default function ProductFormModal({
       setLoading(true);
       setError("");
 
-      const accessToken = localStorage.getItem("accessToken");
+      const accessToken = sessionStorage.getItem("accessToken");
 
       if (!accessToken) {
         throw new Error("Không tìm thấy phiên đăng nhập.");

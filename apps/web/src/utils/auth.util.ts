@@ -16,7 +16,7 @@ export type StoredAuthUser = {
   export function persistAuthenticatedUser(
     user: StoredAuthUser,
   ) {
-    localStorage.setItem(
+    sessionStorage.setItem(
       'user',
       JSON.stringify(user),
     );

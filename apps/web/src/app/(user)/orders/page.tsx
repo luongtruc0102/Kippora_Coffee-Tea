@@ -109,7 +109,7 @@ export default function MyOrdersPage() {
         return;
       }
 
-      const accessToken = localStorage.getItem("accessToken");
+      const accessToken = sessionStorage.getItem("accessToken");
 
       if (!accessToken) {
         router.replace("/login?redirect=/orders");
@@ -170,7 +170,7 @@ export default function MyOrdersPage() {
       setReorderingId(orderId);
       setActionToast(null);
 
-      const accessToken = localStorage.getItem("accessToken");
+      const accessToken = sessionStorage.getItem("accessToken");
       if (!accessToken) {
         router.replace("/login?redirect=/orders");
         return;

@@ -36,9 +36,7 @@ export class VouchersService {
       data: {
         code,
         description: createVoucherDto.description,
-        discountType: createVoucherDto.discountType as
-          | 'PERCENT'
-          | 'FIXED',
+        discountType: createVoucherDto.discountType as 'PERCENT' | 'FIXED',
         discountValue: createVoucherDto.discountValue,
         minOrderValue: createVoucherDto.minOrderValue,
         maxDiscount: createVoucherDto.maxDiscount,
@@ -51,16 +49,13 @@ export class VouchersService {
 
   // ADMIN xem toàn bộ voucher, kể cả voucher đã khóa
   async findAll(query = '') {
-    const [
-      vouchers,
-      staffVoucherUsedCount,
-    ] = await Promise.all([
+    const [vouchers, staffVoucherUsedCount] = await Promise.all([
       this.prisma.voucher.findMany({
         orderBy: {
           createdAt: 'desc',
         },
       }),
-  
+
       // Đếm số lần mã đặc quyền nhân viên đã được sử dụng
       this.prisma.order.count({
         where: {
@@ -68,50 +63,45 @@ export class VouchersService {
         },
       }),
     ]);
-  
+
     const staffVoucher = {
       id: -1,
-  
+
       code: 'NHANVIEN',
-  
-      description:
-        'Giảm 20% cho nhân viên',
-  
-      discountType:
-        'PERCENT' as const,
-  
+
+      description: 'Giảm 20% cho nhân viên',
+
+      discountType: 'PERCENT' as const,
+
       discountValue: 20,
-  
+
       minOrderValue: null,
       maxDiscount: null,
-  
+
       // Không giới hạn lượt sử dụng
       usageLimit: null,
-  
+
       // Lấy số lượt thực tế từ Order
-      usedCount:
-        staffVoucherUsedCount,
-  
+      usedCount: staffVoucherUsedCount,
+
       startAt: null,
       endAt: null,
-  
+
       isActive: true,
-  
+
       createdAt: null,
       updatedAt: null,
-  
+
       isSystemVoucher: true,
     };
-  
+
     const results = [
       staffVoucher,
-  
-      ...vouchers.map(
-        (voucher) => ({
-          ...voucher,
-          isSystemVoucher: false,
-        }),
-      ),
+
+      ...vouchers.map((voucher) => ({
+        ...voucher,
+        isSystemVoucher: false,
+      })),
     ];
 
     return this.fuzzySearch.search(results, query, {
@@ -123,14 +113,9 @@ export class VouchersService {
     });
   }
 
-  async findAvailableForCheckout(
-    userId: number,
-    subtotal: number,
-  ) {
+  async findAvailableForCheckout(userId: number, subtotal: number) {
     if (!Number.isFinite(subtotal) || subtotal < 0) {
-      throw new BadRequestException(
-        'Giá trị đơn hàng không hợp lệ',
-      );
+      throw new BadRequestException('Giá trị đơn hàng không hợp lệ');
     }
 
     const now = new Date();
@@ -150,10 +135,7 @@ export class VouchersService {
             { usedCount: { lt: this.prisma.voucher.fields.usageLimit } },
           ],
         },
-        orderBy: [
-          { minOrderValue: 'asc' },
-          { createdAt: 'desc' },
-        ],
+        orderBy: [{ minOrderValue: 'asc' }, { createdAt: 'desc' }],
       }),
     ]);
 
@@ -163,9 +145,7 @@ export class VouchersService {
 
     const availableVouchers = vouchers.map((voucher) => {
       const minOrderValue =
-        voucher.minOrderValue === null
-          ? 0
-          : Number(voucher.minOrderValue);
+        voucher.minOrderValue === null ? 0 : Number(voucher.minOrderValue);
       const canUse = subtotal >= minOrderValue;
 
       let discountAmount = 0;
@@ -265,39 +245,33 @@ export class VouchersService {
 
     // Ghép dữ liệu cũ và dữ liệu mới để validate toàn bộ voucher
     this.validateVoucherData({
-      discountType:
-        updateVoucherDto.discountType ?? voucher.discountType,
+      discountType: updateVoucherDto.discountType ?? voucher.discountType,
 
       discountValue:
-        updateVoucherDto.discountValue ??
-        Number(voucher.discountValue),
+        updateVoucherDto.discountValue ?? Number(voucher.discountValue),
 
-        minOrderValue:
+      minOrderValue:
         updateVoucherDto.minOrderValue !== undefined
           ? updateVoucherDto.minOrderValue
           : voucher.minOrderValue !== null
             ? Number(voucher.minOrderValue)
             : null,
-      
+
       maxDiscount:
         updateVoucherDto.maxDiscount !== undefined
           ? updateVoucherDto.maxDiscount
           : voucher.maxDiscount !== null
             ? Number(voucher.maxDiscount)
             : null,
-      
+
       usageLimit:
         updateVoucherDto.usageLimit !== undefined
           ? updateVoucherDto.usageLimit
           : voucher.usageLimit,
 
-      startAt:
-        updateVoucherDto.startAt ??
-        voucher.startAt.toISOString(),
+      startAt: updateVoucherDto.startAt ?? voucher.startAt.toISOString(),
 
-      endAt:
-        updateVoucherDto.endAt ??
-        voucher.endAt.toISOString(),
+      endAt: updateVoucherDto.endAt ?? voucher.endAt.toISOString(),
     });
 
     // Chỉ cập nhật các field client thực sự gửi lên
@@ -313,9 +287,7 @@ export class VouchersService {
         }),
 
         ...(updateVoucherDto.discountType !== undefined && {
-          discountType: updateVoucherDto.discountType as
-            | 'PERCENT'
-            | 'FIXED',
+          discountType: updateVoucherDto.discountType as 'PERCENT' | 'FIXED',
         }),
 
         ...(updateVoucherDto.discountValue !== undefined && {
@@ -358,42 +330,31 @@ export class VouchersService {
   }
 
   // Kiểm tra voucher trước khi áp dụng vào checkout
-  async validateForCheckout(code: string, subtotal: number, userId: number,) {
-    const normalizedCode =
-      code.trim().toUpperCase();
-  
+  async validateForCheckout(code: string, subtotal: number, userId: number) {
+    const normalizedCode = code.trim().toUpperCase();
+
     // Voucher cố định dành riêng cho nhân viên
-    if (
-      normalizedCode === 'NHANVIEN'
-    ) {
-      const user =
-        await this.prisma.user.findUnique({
-          where: {
-            id: userId,
-          },
-  
-          include: {
-            role: true,
-          },
-        });
-  
-      if (
-        !user ||
-        user.role.name !== 'STAFF'
-      ) {
-        throw new BadRequestException(
-          'Mã NHANVIEN chỉ dành cho nhân viên',
-        );
+    if (normalizedCode === 'NHANVIEN') {
+      const user = await this.prisma.user.findUnique({
+        where: {
+          id: userId,
+        },
+
+        include: {
+          role: true,
+        },
+      });
+
+      if (!user || user.role.name !== 'STAFF') {
+        throw new BadRequestException('Mã NHANVIEN chỉ dành cho nhân viên');
       }
-  
+
       return {
         voucher: null,
-  
-        voucherCode:
-          'NHANVIEN',
-  
-        discountAmount:
-          subtotal * 0.2,
+
+        voucherCode: 'NHANVIEN',
+
+        discountAmount: subtotal * 0.2,
       };
     }
 
@@ -405,18 +366,14 @@ export class VouchersService {
 
     // Voucher phải tồn tại và đang hoạt động
     if (!voucher || !voucher.isActive) {
-      throw new BadRequestException(
-        'Voucher không tồn tại hoặc đã bị khóa',
-      );
+      throw new BadRequestException('Voucher không tồn tại hoặc đã bị khóa');
     }
 
     const now = new Date();
 
     // Voucher chỉ sử dụng được trong thời gian hiệu lực
     if (now < voucher.startAt || now > voucher.endAt) {
-      throw new BadRequestException(
-        'Voucher chưa có hiệu lực hoặc đã hết hạn',
-      );
+      throw new BadRequestException('Voucher chưa có hiệu lực hoặc đã hết hạn');
     }
 
     // Kiểm tra giới hạn số lượt sử dụng
@@ -424,9 +381,7 @@ export class VouchersService {
       voucher.usageLimit !== null &&
       voucher.usedCount >= voucher.usageLimit
     ) {
-      throw new BadRequestException(
-        'Voucher đã hết lượt sử dụng',
-      );
+      throw new BadRequestException('Voucher đã hết lượt sử dụng');
     }
 
     // Kiểm tra giá trị đơn hàng tối thiểu
@@ -445,15 +400,11 @@ export class VouchersService {
 
     if (voucher.discountType === 'PERCENT') {
       // Tính tiền giảm theo phần trăm
-      discountAmount =
-        (subtotal * Number(voucher.discountValue)) / 100;
+      discountAmount = (subtotal * Number(voucher.discountValue)) / 100;
 
       // Giới hạn số tiền giảm tối đa nếu voucher có maxDiscount
       if (voucher.maxDiscount !== null) {
-        discountAmount = Math.min(
-          discountAmount,
-          Number(voucher.maxDiscount),
-        );
+        discountAmount = Math.min(discountAmount, Number(voucher.maxDiscount));
       }
     } else {
       // Voucher FIXED giảm trực tiếp một số tiền cố định
@@ -461,10 +412,7 @@ export class VouchersService {
     }
 
     // Không cho voucher giảm vượt quá giá trị đơn hàng
-    discountAmount = Math.min(
-      discountAmount,
-      subtotal,
-    );
+    discountAmount = Math.min(discountAmount, subtotal);
 
     return {
       voucher,
@@ -494,10 +442,7 @@ export class VouchersService {
     }
 
     // Voucher phần trăm không được vượt quá 100%
-    if (
-      data.discountType === 'PERCENT' &&
-      data.discountValue > 100
-    ) {
+    if (data.discountType === 'PERCENT' && data.discountValue > 100) {
       throw new BadRequestException(
         'Voucher phần trăm không được giảm quá 100%',
       );
@@ -505,9 +450,7 @@ export class VouchersService {
 
     // Giá trị giảm phải là số dương
     if (data.discountValue <= 0) {
-      throw new BadRequestException(
-        'Giá trị giảm phải lớn hơn 0',
-      );
+      throw new BadRequestException('Giá trị giảm phải lớn hơn 0');
     }
 
     // Nếu có giới hạn lượt dùng thì phải ít nhất là 1
@@ -516,9 +459,7 @@ export class VouchersService {
       data.usageLimit !== null &&
       data.usageLimit < 1
     ) {
-      throw new BadRequestException(
-        'Giới hạn sử dụng phải lớn hơn 0',
-      );
+      throw new BadRequestException('Giới hạn sử dụng phải lớn hơn 0');
     }
   }
 }

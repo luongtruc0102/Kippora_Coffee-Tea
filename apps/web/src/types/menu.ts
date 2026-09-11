@@ -15,6 +15,7 @@ export type Category = {
     id: number;
     name: string;
     price: number | string;
+    imageUrl: string | null;
     isActive: boolean;
   };
   

@@ -11,27 +11,23 @@ export class DashboardVouchersService {
   async getVoucherStatistics(
     limit = 5,
     period: DashboardPeriod = '7D',
+    branchId?: number,
+    from?: string,
+    to?: string,
   ) {
-    const safeLimit = Math.min(
-      Math.max(limit, 1),
-      20,
-    );
+    const safeLimit = Math.min(Math.max(limit, 1), 20);
 
-    const { startDate, endDate } =
-      getDashboardPeriodRange(period);
+    const { startDate, endDate } = getDashboardPeriodRange(period, from, to);
 
     const now = new Date();
 
-    const [
-      voucherUsage,
-      totalDiscount,
-      activeVouchers,
-    ] = await Promise.all([
+    const [voucherUsage, totalDiscount, activeVouchers] = await Promise.all([
       // Đếm số lần voucher được sử dụng trong khoảng thời gian
       this.prisma.order.groupBy({
         by: ['voucherId'],
 
         where: {
+          ...(branchId ? { branchId } : {}),
           voucherId: {
             not: null,
           },
@@ -58,6 +54,7 @@ export class DashboardVouchersService {
       // Tổng tiền đã giảm trong khoảng thời gian
       this.prisma.order.aggregate({
         where: {
+          ...(branchId ? { branchId } : {}),
           voucherId: {
             not: null,
           },
@@ -91,10 +88,7 @@ export class DashboardVouchersService {
 
     const voucherIds = voucherUsage
       .map((item) => item.voucherId)
-      .filter(
-        (voucherId): voucherId is number =>
-          voucherId !== null,
-      );
+      .filter((voucherId): voucherId is number => voucherId !== null);
 
     // Lấy thông tin chi tiết của các voucher trong top
     const vouchers =
@@ -119,10 +113,7 @@ export class DashboardVouchersService {
         : [];
 
     const voucherMap = new Map(
-      vouchers.map((voucher) => [
-        voucher.id,
-        voucher,
-      ]),
+      vouchers.map((voucher) => [voucher.id, voucher]),
     );
 
     const topVouchers = voucherUsage
@@ -131,8 +122,7 @@ export class DashboardVouchersService {
           return null;
         }
 
-        const voucher =
-          voucherMap.get(usage.voucherId);
+        const voucher = voucherMap.get(usage.voucherId);
 
         if (!voucher) {
           return null;
@@ -154,11 +144,7 @@ export class DashboardVouchersService {
           // Số lượt còn lại thực tế của voucher
           remainingUsage:
             voucher.usageLimit !== null
-              ? Math.max(
-                  voucher.usageLimit -
-                    voucher.usedCount,
-                  0,
-                )
+              ? Math.max(voucher.usageLimit - voucher.usedCount, 0)
               : null,
 
           endAt: voucher.endAt,
@@ -166,19 +152,13 @@ export class DashboardVouchersService {
         };
       })
       .filter(
-        (
-          voucher,
-        ): voucher is NonNullable<
-          typeof voucher
-        > => voucher !== null,
+        (voucher): voucher is NonNullable<typeof voucher> => voucher !== null,
       );
 
     return {
       period,
 
-      totalDiscount: Number(
-        totalDiscount._sum.discountAmount ?? 0,
-      ),
+      totalDiscount: Number(totalDiscount._sum.discountAmount ?? 0),
 
       activeVouchers,
 

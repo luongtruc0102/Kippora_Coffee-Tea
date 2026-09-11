@@ -204,7 +204,7 @@ export default function AddressFormModal({
 
     async function loadInitialRoute() {
       const accessToken =
-        localStorage.getItem(
+        sessionStorage.getItem(
           "accessToken",
         );
 
@@ -295,7 +295,7 @@ export default function AddressFormModal({
 
     async function loadSuggestions() {
       const accessToken =
-        localStorage.getItem(
+        sessionStorage.getItem(
           "accessToken",
         );
 
@@ -354,7 +354,7 @@ export default function AddressFormModal({
     selectedAddress?: string,
   ) {
     const accessToken =
-      localStorage.getItem(
+      sessionStorage.getItem(
         "accessToken",
       );
 
@@ -480,7 +480,7 @@ export default function AddressFormModal({
       setSubmitting(true);
 
       const accessToken =
-        localStorage.getItem(
+        sessionStorage.getItem(
           "accessToken",
         );
 

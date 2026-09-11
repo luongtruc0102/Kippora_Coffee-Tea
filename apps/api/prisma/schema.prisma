@@ -25,7 +25,8 @@ model Role {
   updatedAt DateTime @updatedAt
 }
 
-// Tài khoản người dùng trong hệ thống
+/// Tài khoản đăng nhập và phân quyền cốt lõi của một người dùng.
+/// Thông tin cá nhân, khách hàng và nhân sự được tách sang các bảng profile một-một.
 model User {
   id    Int    @id @default(autoincrement())
   email String @unique
@@ -33,20 +34,59 @@ model User {
   // Mật khẩu sẽ được hash trước khi lưu vào database
   password String
 
-  fullName  String?
-  phone     String? @unique
-  avatarUrl String?
-  address   String?
-
   // Foreign Key liên kết User với Role
   roleId Int
   role   Role @relation(fields: [roleId], references: [id])
 
+  /// Hồ sơ chung luôn chứa tên, số điện thoại, ảnh đại diện và địa chỉ.
+  profile         UserProfile?
+  /// Hồ sơ khách hàng chứa điểm tích lũy; nhân viên vẫn có hồ sơ này để mua hàng như khách.
+  customerProfile CustomerProfile?
+  /// Hồ sơ nhân sự chỉ tồn tại với STAFF hoặc BRANCH_MANAGER.
+  staffProfile    StaffProfile?
+
+  // Nếu User là trưởng chi nhánh, quan hệ này trỏ về chi nhánh họ quản lý.
+  managedBranch StoreBranch? @relation("BranchManager")
+
+  // Lịch sử ca làm của nhân viên và người trưởng đã ghi nhận ca.
+  attendanceRecords          StaffAttendance[]            @relation("AttendanceEmployee")
+  recordedAttendances        StaffAttendance[]            @relation("AttendanceRecorder")
+  scheduledShifts            StaffShift[]                 @relation("ShiftEmployee")
+  createdShifts              StaffShift[]                 @relation("ShiftCreator")
+  leaveRequests              StaffLeaveRequest[]          @relation("LeaveRequestEmployee")
+  reviewedLeaveRequests      StaffLeaveRequest[]          @relation("LeaveRequestReviewer")
+  shiftCoverages             StaffShiftCoverage[]         @relation("ShiftCoverageEmployee")
+  assignedShiftCoverages     StaffShiftCoverage[]         @relation("ShiftCoverageAssigner")
+  inventoryMovements         InventoryMovement[]
+  inventoryLotDisposals      InventoryLotDisposal[]       @relation("InventoryLotDisposalActor")
+  createdPurchaseOrders      PurchaseOrder[]              @relation("PurchaseOrderCreator")
+  reviewedPurchaseOrders     PurchaseOrder[]              @relation("PurchaseOrderReviewer")
+  createdStockReceipts       StockReceipt[]               @relation("StockReceiptCreator")
+  createdInventoryCounts     InventoryCount[]             @relation("InventoryCountCreator")
+  reviewedInventoryCounts    InventoryCount[]             @relation("InventoryCountReviewer")
+  payrollEntries             StaffPayrollEntry[]          @relation("PayrollEmployee")
+  finalizedPayrolls          StaffPayrollPeriod[]         @relation("PayrollFinalizer")
+  paidPayrolls               StaffPayrollPeriod[]         @relation("PayrollPayer")
+  payrollAdjustments         StaffPayrollAdjustment[]     @relation("PayrollAdjustmentCreator")
+  submittedAttendancePeriods StaffAttendancePeriod[]      @relation("AttendancePeriodSubmitter")
+  reviewedAttendancePeriods  StaffAttendancePeriod[]      @relation("AttendancePeriodReviewer")
+  attendancePeriodEvents     StaffAttendancePeriodEvent[] @relation("AttendancePeriodEventActor")
+  /// Nhật ký các thao tác quản trị do tài khoản này thực hiện.
+  auditLogs                  AuditLog[]                   @relation("AuditLogActor")
+  /// Các khoản chi do tài khoản lập và các khoản chi Admin đã duyệt.
+  createdExpenses            BranchExpense[]              @relation("ExpenseCreator")
+  reviewedExpenses           BranchExpense[]              @relation("ExpenseReviewer")
+  /// Vai trò của tài khoản trong quy trình mở, đóng, duyệt và mở lại sổ quỹ.
+  openedCashSessions         CashSession[]                @relation("CashSessionOpener")
+  closedCashSessions         CashSession[]                @relation("CashSessionCloser")
+  approvedCashSessions       CashSession[]                @relation("CashSessionApprover")
+  reopenedCashSessions       CashSession[]                @relation("CashSessionReopener")
+  cashSessionEvents          CashSessionEvent[]           @relation("CashSessionEventActor")
+  /// Các chứng từ hoàn tiền do tài khoản có quyền xử lý.
+  processedPaymentRefunds    PaymentRefund[]              @relation("PaymentRefundProcessor")
+
   // Trạng thái tài khoản: true = hoạt động, false = bị khóa
   isActive Boolean @default(true)
-
-  // Điểm khách hàng tích lũy từ các đơn hoàn tất
-  loyaltyPoints Int @default(0)
 
   // Mỗi user có tối đa một giỏ hàng
   cart Cart?
@@ -66,8 +106,60 @@ model User {
   // Thông báo bền vững để user xem lại trên mọi thiết bị
   notifications Notification[]
 
+  // Những sản phẩm user đã đánh dấu yêu thích
+  productFavorites ProductFavorite[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/// Thông tin cá nhân dùng chung cho mọi tài khoản, tách khỏi dữ liệu bảo mật đăng nhập.
+model UserProfile {
+  /// Dùng chung khóa chính với User để giữ quan hệ một-một và truy xuất nhanh.
+  userId Int  @id
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  fullName  String?
+  phone     String? @unique
+  avatarUrl String?
+  address   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Dữ liệu dành cho hành vi mua hàng; mọi tài khoản đều có thể đồng thời là khách hàng.
+model CustomerProfile {
+  /// Dùng chung khóa chính với User để giữ quan hệ một-một.
+  userId Int  @id
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Điểm được cộng từ đơn hoàn tất và có thể dùng để giảm giá.
+  loyaltyPoints Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Thông tin phân công dành riêng cho STAFF và BRANCH_MANAGER.
+model StaffProfile {
+  /// Dùng chung khóa chính với User; không tạo một định danh nhân viên thứ hai.
+  userId Int  @id
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Chi nhánh làm việc hiện tại; lịch sử ca vẫn giữ branchId riêng trên từng bản ghi.
+  branchId Int?
+  branch   StoreBranch? @relation("BranchMembers", fields: [branchId], references: [id], onDelete: SetNull)
+
+  /// Đơn giá một giờ làm việc hiện tại; mỗi kỳ lương sẽ chụp lại giá trị này để giữ lịch sử.
+  hourlyRate         Decimal @default(32000) @db.Decimal(12, 2)
+  /// Hệ số áp dụng cho thời gian làm sau giờ kết thúc ca đã xếp.
+  overtimeMultiplier Decimal @default(1.5) @db.Decimal(4, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([branchId])
 }
 
 // Danh mục sản phẩm
@@ -112,6 +204,9 @@ model Product {
   // Các lượt đánh giá sản phẩm từ những đơn đã hoàn tất
   productReviews ProductReview[]
 
+  // Những user đã đánh dấu sản phẩm này là yêu thích
+  favoritedBy ProductFavorite[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -139,7 +234,8 @@ model ProductVariant {
   cartItems CartItem[]
 
   // Các OrderItem từng sử dụng variant này
-  orderItems OrderItem[]
+  orderItems        OrderItem[]
+  recipeIngredients VariantRecipeIngredient[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -155,6 +251,7 @@ model Topping {
   id       Int     @id @default(autoincrement())
   name     String  @unique
   price    Decimal @db.Decimal(10, 2)
+  imageUrl String?
   isActive Boolean @default(true)
 
   // Một topping có thể áp dụng cho nhiều sản phẩm
@@ -164,7 +261,8 @@ model Topping {
   cartItems CartItemTopping[]
 
   // Các topping đã được lưu trong lịch sử đơn hàng
-  orderItems OrderItemTopping[]
+  orderItems        OrderItemTopping[]
+  recipeIngredients ToppingRecipeIngredient[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -252,10 +350,194 @@ enum OrderStatus {
   CANCELLED
 }
 
+enum InventoryState {
+  NOT_TRACKED
+  RESERVED
+  CONSUMED
+  RELEASED
+}
+
+/// Vòng đời của một lô nguyên liệu sau khi được nhập vào kho.
+enum InventoryLotStatus {
+  ACTIVE
+  DEPLETED
+  DISPOSED
+}
+
+enum IngredientUnit {
+  GRAM
+  MILLILITER
+  PIECE
+}
+
+enum InventoryMovementType {
+  ADJUST
+  RECEIVE
+  RESERVE
+  RELEASE
+  CONSUME
+}
+
+enum StockReceiptStatus {
+  DRAFT
+  COMPLETED
+  CANCELLED
+}
+
+/// Vòng đời đề xuất và đơn đặt nguyên liệu từ lúc lập nháp đến khi nhận đủ hàng.
+enum PurchaseOrderStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  ORDERED
+  PARTIALLY_RECEIVED
+  COMPLETED
+  REJECTED
+  CANCELLED
+}
+
+/// Vòng đời phiếu kiểm kê: lập nháp, chờ Admin duyệt và kết quả cuối cùng.
+enum InventoryCountStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+/// Nguyên nhân chênh lệch thực tế so với số liệu hệ thống.
+enum InventoryVarianceReason {
+  BREAKAGE
+  SPOILAGE
+  EXPIRED
+  LOSS
+  COUNTING_ERROR
+  OTHER
+}
+
+/// Nhóm chi phí vận hành ngoài tiền nhập nguyên liệu và tiền lương.
+enum ExpenseCategory {
+  RENT
+  UTILITIES
+  MAINTENANCE
+  MARKETING
+  SUPPLIES
+  TRANSPORT
+  OTHER
+}
+
+/// Vòng đời khoản chi: lập nháp, chờ Admin duyệt và kết quả cuối cùng.
+enum ExpenseStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+/// Cách khoản chi đã được thanh toán, dùng để tách tiền ra khỏi két và chuyển khoản.
+enum ExpensePaymentMethod {
+  CASH
+  BANK_TRANSFER
+}
+
+/// OPEN: đang ghi nhận giao dịch; PENDING_REVIEW: trưởng chi nhánh đã kiểm đếm; APPROVED: Admin đã khóa sổ.
+enum CashSessionStatus {
+  OPEN
+  PENDING_REVIEW
+  APPROVED
+}
+
+/// Nhật ký vòng đời bất biến của một sổ quỹ theo ngày.
+enum CashSessionEventType {
+  OPENED
+  CLOSED
+  APPROVED
+  REOPENED
+}
+
+// Ba khung ca chuẩn do Admin cấu hình riêng cho từng chi nhánh.
+enum StaffShiftPeriod {
+  MORNING
+  AFTERNOON
+  EVENING
+}
+
+// Phân biệt nghỉ có kế hoạch và tình huống khẩn cấp sát giờ làm.
+enum StaffLeaveType {
+  PLANNED
+  EMERGENCY
+}
+
+/// Phạm vi xin phép: nghỉ toàn bộ ca, đến trễ có phép hoặc kết thúc ca sớm.
+enum StaffLeaveScope {
+  FULL_SHIFT
+  LATE_ARRIVAL
+  EARLY_LEAVE
+}
+
+enum StaffLeaveStatus {
+  PENDING
+  NEEDS_INFO
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+/// Trạng thái lời mời làm thay phần đầu ca cho nhân viên xin đến trễ.
+enum StaffShiftCoverageStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  COMPLETED
+  CANCELLED
+}
+
+/// Kỳ lương còn nháp sẽ tự đồng bộ lại bảng công; kỳ đã chốt là ảnh chụp bất biến.
+enum StaffPayrollStatus {
+  DRAFT
+  FINALIZED
+  PAID
+}
+
+/// Trạng thái đối soát bảng công tháng trước khi dữ liệu được phép dùng để chốt lương.
+enum StaffAttendancePeriodStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  RETURNED
+}
+
+/// Hành động bất biến trong lịch sử gửi và duyệt bảng công.
+enum StaffAttendancePeriodAction {
+  SUBMITTED
+  APPROVED
+  RETURNED
+  REOPENED
+}
+
+/// Phương thức Admin dùng để chi trả bảng lương đã chốt.
+enum StaffPayrollPaymentMethod {
+  CASH
+  BANK_TRANSFER
+}
+
+/// Khoản điều chỉnh thủ công bắt buộc có lý do để truy vết thưởng và khấu trừ.
+enum StaffPayrollAdjustmentType {
+  BONUS
+  DEDUCTION
+}
+
 // Cách khách nhận món
 enum FulfillmentMethod {
   DELIVERY
   PICKUP
+}
+
+// Nguồn tạo đơn giúp tách checkout online và hóa đơn tại quầy POS.
+enum OrderChannel {
+  ONLINE
+  POS
 }
 
 // Đơn hàng của người dùng
@@ -265,6 +547,18 @@ model Order {
   // User đã đặt đơn
   userId Int
   user   User @relation(fields: [userId], references: [id])
+
+  // Chi nhánh xử lý đơn, lưu độc lập với chi nhánh hiện tại của Staff.
+  branchId Int
+  branch   StoreBranch @relation(fields: [branchId], references: [id])
+
+  // ONLINE là đơn do khách checkout; POS là đơn do trưởng chi nhánh tạo tại quầy.
+  channel          OrderChannel @default(ONLINE)
+  createdByStaffId Int?
+
+  // Khách tại quầy chưa có tài khoản có thể tích điểm bằng số điện thoại.
+  posCustomerId Int?
+  posCustomer   PosCustomer? @relation(fields: [posCustomerId], references: [id], onDelete: SetNull)
 
   // Tổng tiền trước khi áp dụng voucher
   subtotal Decimal @default(0) @db.Decimal(10, 2)
@@ -290,15 +584,21 @@ model Order {
   deliveryDiscountAmount Decimal  @default(0) @db.Decimal(10, 2)
   deliveryFee            Decimal  @default(0) @db.Decimal(10, 2)
 
-  status OrderStatus @default(PENDING)
+  status         OrderStatus    @default(PENDING)
+  inventoryState InventoryState @default(NOT_TRACKED)
 
   // Dấu vết hủy đơn để khách hàng và cửa hàng cùng tra cứu được nguyên nhân.
   cancelReason String?
   cancelledAt  DateTime?
 
-  items           OrderItem[]
-  appliedVouchers OrderVoucher[]
-  notifications   Notification[]
+  items                    OrderItem[]
+  appliedVouchers          OrderVoucher[]
+  notifications            Notification[]
+  inventoryReservations    OrderIngredientReservation[]
+  ingredientLotAllocations OrderIngredientLotAllocation[]
+  inventoryMovements       InventoryMovement[]
+  /// Chứng từ hoàn tiền nếu đơn đã thanh toán bị hủy; mỗi đơn chỉ được hoàn toàn bộ một lần.
+  refund                   PaymentRefund?
 
   // Voucher đã áp dụng cho đơn hàng
   voucherId Int?
@@ -331,6 +631,24 @@ model Order {
   @@index([userId])
   @@index([status])
   @@index([voucherId])
+  @@index([branchId])
+  @@index([channel])
+  @@index([createdByStaffId])
+  @@index([posCustomerId])
+}
+
+// Hồ sơ khách tại quầy không cần email hay mật khẩu.
+// Nếu số điện thoại đã thuộc một User, POS sẽ dùng User thay vì tạo bản ghi này.
+model PosCustomer {
+  id Int @id @default(autoincrement())
+
+  phone         String  @unique @db.VarChar(20)
+  fullName      String  @db.VarChar(100)
+  loyaltyPoints Int     @default(0)
+  orders        Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // Thông báo của user; orderId có thể null cho thông báo hệ thống sau này.
@@ -346,7 +664,7 @@ model Notification {
   type    String
   title   String
   message String
-  isRead  Boolean @default(false)
+  isRead  Boolean   @default(false)
   readAt  DateTime?
 
   createdAt DateTime @default(now())
@@ -386,7 +704,8 @@ model OrderItem {
   // Tổng tiền của dòng = unitPrice × quantity
   lineTotal Decimal @db.Decimal(10, 2)
 
-  toppings OrderItemTopping[]
+  toppings          OrderItemTopping[]
+  recipeIngredients OrderItemRecipeIngredient[]
 
   createdAt DateTime @default(now())
 
@@ -566,6 +885,13 @@ enum PaymentStatus {
   PAID
   FAILED
   CANCELLED
+  REFUNDED
+}
+
+/// Phương thức cửa hàng thực tế dùng để trả lại tiền cho khách.
+enum RefundMethod {
+  CASH
+  BANK_TRANSFER
 }
 
 // Thông tin thanh toán của đơn hàng
@@ -589,11 +915,44 @@ model Payment {
   // Thời điểm thanh toán thành công
   paidAt DateTime?
 
+  /// Chứng từ hoàn toàn bộ giao dịch; mỗi Payment chỉ có tối đa một chứng từ.
+  refund PaymentRefund?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([status])
   @@index([method])
+}
+
+/// Chứng từ hoàn toàn bộ tiền của một đơn đã thanh toán.
+/// Bản ghi chỉ được tạo cùng transaction hủy đơn để trạng thái đơn, thanh toán và quỹ không lệch nhau.
+model PaymentRefund {
+  id   Int    @id @default(autoincrement())
+  code String @unique @db.VarChar(50)
+
+  orderId Int   @unique
+  order   Order @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  paymentId Int     @unique
+  payment   Payment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+
+  branchId Int
+  branch   StoreBranch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  /// Số tiền hoàn luôn lấy từ Payment trên server, không nhận từ giao diện.
+  amount Decimal      @db.Decimal(16, 2)
+  method RefundMethod
+  reason String       @db.VarChar(500)
+
+  processedById Int
+  processedBy   User     @relation("PaymentRefundProcessor", fields: [processedById], references: [id], onDelete: Restrict)
+  processedAt   DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  @@index([branchId, processedAt])
+  @@index([method, processedAt])
+  @@index([processedById, processedAt])
 }
 
 // Địa chỉ giao hàng được user lưu để tái sử dụng ở checkout.
@@ -623,4 +982,1167 @@ model UserAddress {
 
   @@index([userId])
   @@index([userId, isDefault])
+}
+
+/// Danh sách sản phẩm yêu thích của người dùng.
+/// Khóa chính kép bảo đảm một người không thể lưu trùng cùng một sản phẩm.
+model ProductFavorite {
+  /// Người dùng đã đánh dấu yêu thích sản phẩm.
+  userId    Int
+  /// Sản phẩm được người dùng đánh dấu yêu thích.
+  productId Int
+
+  /// Quan hệ bị xóa theo User hoặc Product để không giữ bản ghi yêu thích mồ côi.
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  /// Thời điểm người dùng thêm sản phẩm vào danh sách yêu thích.
+  createdAt DateTime @default(now())
+
+  /// Khóa kép chống yêu thích trùng; các index tối ưu đếm theo sản phẩm và tải danh sách mới nhất của user.
+  @@id([userId, productId])
+  @@index([productId])
+  @@index([userId, createdAt])
+}
+
+/// Cấu hình vận hành chung của toàn hệ thống như nhận đơn, hình thức giao nhận và giờ mở cửa.
+/// Đây là bảng singleton: service luôn đọc và cập nhật bản ghi có id = 1.
+model StoreSettings {
+  /// Bản ghi cấu hình singleton; ứng dụng luôn sử dụng id = 1.
+  id Int @id @default(1)
+
+  /// Công tắc tổng cho phép hoặc tạm dừng nhận đơn trên toàn hệ thống.
+  isAcceptingOrders Boolean @default(true)
+  /// Cho phép khách chọn hình thức giao tận nơi.
+  deliveryEnabled   Boolean @default(true)
+  /// Cho phép khách chọn hình thức đến cửa hàng nhận món.
+  pickupEnabled     Boolean @default(true)
+
+  /// Giờ mở cửa theo giờ Việt Nam, định dạng HH:mm.
+  openingTime String @default("07:00") @db.VarChar(5)
+  /// Giờ đóng cửa theo giờ Việt Nam, định dạng HH:mm.
+  closingTime String @default("22:00") @db.VarChar(5)
+
+  /// Thời gian chuẩn dự kiến để cửa hàng chuẩn bị một đơn, tính bằng phút.
+  preparationMinutes    Int     @default(20)
+  /// Bán kính giao hàng tối đa tính từ chi nhánh đến địa chỉ khách, đơn vị km.
+  maxDeliveryDistanceKm Decimal @default(15) @db.Decimal(6, 2)
+  /// Lý do tạm dừng nhận đơn hiển thị cho khách khi công tắc tổng bị tắt.
+  pauseReason           String? @db.VarChar(200)
+
+  /// Thời điểm tạo và cập nhật cấu hình hệ thống.
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Hồ sơ chi nhánh và trạng thái vận hành riêng của từng cửa hàng.
+/// Là nút gốc liên kết nhân viên, đơn hàng, lịch làm, chấm công và toàn bộ nghiệp vụ kho tại chi nhánh.
+model StoreBranch {
+  /// Khóa chính tự tăng của chi nhánh.
+  id   Int    @id @default(autoincrement())
+  /// Mã chi nhánh duy nhất dùng trong quản trị, báo cáo và mã phiếu nhập.
+  code String @unique @db.VarChar(50)
+  /// Tên chi nhánh hiển thị cho khách và nhân viên.
+  name String @db.VarChar(120)
+
+  /// Địa chỉ hoạt động của chi nhánh.
+  address String? @db.VarChar(255)
+  /// Số điện thoại liên hệ của chi nhánh.
+  phone   String? @db.VarChar(20)
+
+  /// Ngày khai trương thực tế, tách biệt với ngày tạo bản ghi trên hệ thống.
+  openedAt DateTime? @db.Date
+
+  /// Trạng thái sử dụng của chi nhánh; false sẽ ngăn vận hành và phân công mới.
+  isActive          Boolean @default(true)
+  /// Công tắc nhận đơn riêng của chi nhánh, hoạt động bên dưới công tắc toàn hệ thống.
+  isAcceptingOrders Boolean @default(true)
+  /// Lý do chi nhánh tạm dừng nhận đơn.
+  pauseReason       String? @db.VarChar(200)
+
+  /// Trưởng chi nhánh; unique bảo đảm một người không đồng thời quản lý nhiều chi nhánh.
+  managerId Int?  @unique
+  manager   User? @relation("BranchManager", fields: [managerId], references: [id], onDelete: SetNull)
+
+  /// Thời điểm tạo và cập nhật thông tin chi nhánh.
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Toàn bộ dữ liệu vận hành thuộc chi nhánh.
+  staff                 StaffProfile[]          @relation("BranchMembers")
+  orders                Order[]
+  attendances           StaffAttendance[]
+  shifts                StaffShift[]
+  shiftTemplates        StaffShiftTemplate[]
+  leaveRequests         StaffLeaveRequest[]
+  shiftCoverages        StaffShiftCoverage[]
+  inventoryStocks       InventoryStock[]
+  inventoryLots         InventoryLot[]
+  inventoryLotDisposals InventoryLotDisposal[]
+  inventoryMovements    InventoryMovement[]
+  purchaseOrders        PurchaseOrder[]
+  stockReceipts         StockReceipt[]
+  inventoryCounts       InventoryCount[]
+  payrollPeriods        StaffPayrollPeriod[]
+  attendancePeriods     StaffAttendancePeriod[]
+  /// Nhật ký vận hành gắn với chi nhánh; bản ghi không bị xóa khi tài khoản thay đổi.
+  auditLogs             AuditLog[]
+  /// Chi phí vận hành phát sinh tại chi nhánh.
+  expenses              BranchExpense[]
+  /// Sổ quỹ tiền mặt theo ngày của chi nhánh.
+  cashSessions          CashSession[]
+  /// Các khoản tiền đã trả lại cho khách tại chi nhánh.
+  paymentRefunds        PaymentRefund[]
+}
+
+/// Nhật ký bất biến cho các thao tác ảnh hưởng đến nhân sự, bảng công, lương và kho.
+/// Ứng dụng chỉ cung cấp API tạo và đọc; không có API sửa hoặc xóa bản ghi này.
+model AuditLog {
+  id Int @id @default(autoincrement())
+
+  /// Người thực hiện; giữ lại nhật ký nếu tài khoản bị xóa.
+  actorId Int?
+  actor   User? @relation("AuditLogActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  /// Chi nhánh chịu tác động. Null dùng cho thay đổi mang tính toàn hệ thống.
+  branchId Int?
+  branch   StoreBranch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  /// Nhóm nghiệp vụ và hành động dùng để lọc trên giao diện.
+  module     String  @db.VarChar(40)
+  action     String  @db.VarChar(60)
+  entityType String  @db.VarChar(60)
+  entityId   String? @db.VarChar(80)
+
+  /// Câu mô tả dành cho người quản lý, không phụ thuộc vào dữ liệu JSON chi tiết.
+  description String @db.VarChar(300)
+
+  /// Ảnh chụp dữ liệu trước và sau thao tác để đối soát khi có sai lệch.
+  beforeData Json?
+  afterData  Json?
+  metadata   Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([actorId, createdAt])
+  @@index([branchId, createdAt])
+  @@index([module, createdAt])
+  @@index([action, createdAt])
+}
+
+/// Khoản chi vận hành phát sinh tại một chi nhánh, không bao gồm phiếu nhập kho và bảng lương.
+/// Trưởng chi nhánh lập và gửi duyệt; chỉ Admin được chuyển khoản chi sang APPROVED hoặc REJECTED.
+/// Không xóa vật lý khoản chi để bảo toàn lịch sử đối soát và báo cáo tài chính.
+model BranchExpense {
+  /// Khóa chính tự tăng và mã chứng từ thân thiện dùng trên giao diện.
+  id   Int    @id @default(autoincrement())
+  code String @unique @db.VarChar(40)
+
+  /// Chi nhánh chịu khoản chi; lịch sử được giữ ngay cả khi chi nhánh tạm ngưng.
+  branchId Int
+  branch   StoreBranch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  /// Người lập khoản chi và Admin xử lý lần cuối.
+  createdById  Int
+  createdBy    User  @relation("ExpenseCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  reviewedById Int?
+  reviewedBy   User? @relation("ExpenseReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  /// Nội dung nghiệp vụ của khoản chi.
+  category      ExpenseCategory
+  /// CASH được trừ khỏi quỹ tiền mặt; BANK_TRANSFER chỉ đi vào báo cáo chi phí.
+  paymentMethod ExpensePaymentMethod @default(CASH)
+  amount        Decimal              @db.Decimal(16, 2)
+  incurredOn    DateTime             @db.Date
+  description   String               @db.VarChar(180)
+  note          String?              @db.VarChar(500)
+
+  /// Trạng thái và dấu thời gian phục vụ luồng duyệt.
+  status      ExpenseStatus @default(DRAFT)
+  submittedAt DateTime?
+  reviewedAt  DateTime?
+  reviewNote  String?       @db.VarChar(500)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([branchId, incurredOn])
+  @@index([status, submittedAt])
+  @@index([category, incurredOn])
+  @@index([createdById, createdAt])
+}
+
+/// Sổ đối soát quỹ của một chi nhánh trong một ngày kinh doanh.
+/// Doanh thu được tổng hợp từ Payment đã PAID; chi tiền mặt chỉ lấy BranchExpense đã APPROVED.
+/// Các số liệu được chụp khi đóng và tính lại lần cuối lúc Admin duyệt để tránh khoản chi chờ duyệt bị bỏ sót.
+model CashSession {
+  id   Int    @id @default(autoincrement())
+  code String @unique @db.VarChar(40)
+
+  branchId Int
+  branch   StoreBranch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  /// Mỗi chi nhánh chỉ có một sổ quỹ cho một ngày Việt Nam.
+  businessDate DateTime          @db.Date
+  status       CashSessionStatus @default(OPEN)
+
+  openingFloat Decimal  @db.Decimal(16, 2)
+  openingNote  String?  @db.VarChar(500)
+  openedById   Int
+  openedBy     User     @relation("CashSessionOpener", fields: [openedById], references: [id], onDelete: Restrict)
+  openedAt     DateTime @default(now())
+
+  /// Ảnh chụp số liệu hệ thống tại lần đóng hoặc duyệt gần nhất.
+  cashSalesAmount   Decimal @default(0) @db.Decimal(16, 2)
+  bankSalesAmount   Decimal @default(0) @db.Decimal(16, 2)
+  cashExpenseAmount Decimal @default(0) @db.Decimal(16, 2)
+  /// Khoản hoàn tiền phát sinh trong đúng ngày và theo phương thức thực trả.
+  cashRefundAmount  Decimal @default(0) @db.Decimal(16, 2)
+  bankRefundAmount  Decimal @default(0) @db.Decimal(16, 2)
+  expectedCash      Decimal @default(0) @db.Decimal(16, 2)
+
+  actualCash  Decimal?  @db.Decimal(16, 2)
+  difference  Decimal?  @db.Decimal(16, 2)
+  closingNote String?   @db.VarChar(500)
+  closedById  Int?
+  closedBy    User?     @relation("CashSessionCloser", fields: [closedById], references: [id], onDelete: SetNull)
+  closedAt    DateTime?
+
+  approvedById Int?
+  approvedBy   User?     @relation("CashSessionApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  approvedAt   DateTime?
+  reviewNote   String?   @db.VarChar(500)
+
+  reopenedById Int?
+  reopenedBy   User?     @relation("CashSessionReopener", fields: [reopenedById], references: [id], onDelete: SetNull)
+  reopenedAt   DateTime?
+  reopenReason String?   @db.VarChar(500)
+
+  events CashSessionEvent[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([branchId, businessDate])
+  @@index([status, businessDate])
+  @@index([openedById, openedAt])
+}
+
+/// Dòng lịch sử bất biến của sổ quỹ; giao diện không cung cấp API sửa hoặc xóa.
+model CashSessionEvent {
+  id Int @id @default(autoincrement())
+
+  cashSessionId Int
+  cashSession   CashSession @relation(fields: [cashSessionId], references: [id], onDelete: Cascade)
+
+  actorId Int?
+  actor   User? @relation("CashSessionEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  type       CashSessionEventType
+  reason     String?              @db.VarChar(500)
+  beforeData Json?
+  afterData  Json?
+  createdAt  DateTime             @default(now())
+
+  @@index([cashSessionId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([type, createdAt])
+}
+
+/// Danh mục nguyên liệu chuẩn dùng chung cho công thức, tồn kho, đặt giữ và nhập hàng.
+/// Đơn vị đo được cố định trên nguyên liệu để mọi giao dịch kho có thể đối soát nhất quán.
+model Ingredient {
+  /// Khóa chính tự tăng của nguyên liệu.
+  id       Int            @id @default(autoincrement())
+  /// Tên nguyên liệu duy nhất dùng trong kho và công thức.
+  name     String         @unique @db.VarChar(120)
+  /// Đơn vị đo chuẩn của nguyên liệu: gram, milliliter hoặc cái.
+  unit     IngredientUnit
+  /// False nghĩa là ngừng sử dụng nguyên liệu cho công thức mới nhưng vẫn giữ lịch sử.
+  isActive Boolean        @default(true)
+
+  /// Các quan hệ tồn kho, công thức, đặt giữ, biến động và nhập hàng của nguyên liệu.
+  stocks              InventoryStock[]
+  lots                InventoryLot[]
+  lotDisposals        InventoryLotDisposal[]
+  variantRecipes      VariantRecipeIngredient[]
+  toppingRecipes      ToppingRecipeIngredient[]
+  orderItemSnapshots  OrderItemRecipeIngredient[]
+  orderReservations   OrderIngredientReservation[]
+  movements           InventoryMovement[]
+  purchaseOrderItems  PurchaseOrderItem[]
+  stockReceiptItems   StockReceiptItem[]
+  inventoryCountItems InventoryCountItem[]
+
+  /// Thời điểm tạo và cập nhật danh mục nguyên liệu.
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Số dư tồn kho hiện tại của một nguyên liệu tại một chi nhánh.
+/// Tồn có thể dùng được tính bằng quantity trừ reservedQuantity; mọi thay đổi phải có InventoryMovement đối ứng.
+model InventoryStock {
+  /// Khóa chính tự tăng của một dòng tồn kho.
+  id                 Int         @id @default(autoincrement())
+  /// Chi nhánh đang sở hữu số lượng nguyên liệu này.
+  branchId           Int
+  branch             StoreBranch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  /// Nguyên liệu được theo dõi; không cho xóa nguyên liệu khi còn lịch sử tồn kho.
+  ingredientId       Int
+  ingredient         Ingredient  @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+  /// Tồn thực tế hiện có, tăng khi hoàn tất phiếu nhập và giảm khi đơn tiêu thụ nguyên liệu.
+  quantity           Decimal     @default(0) @db.Decimal(14, 3)
+  /// Số lượng đang giữ cho các đơn chưa hoàn tất; lượng có thể dùng = quantity - reservedQuantity.
+  reservedQuantity   Decimal     @default(0) @db.Decimal(14, 3)
+  /// Ngưỡng cảnh báo nhập thêm; cảnh báo khi lượng có thể dùng nhỏ hơn hoặc bằng mức này.
+  minimumLevel       Decimal     @default(0) @db.Decimal(14, 3)
+  /// Lần gần nhất đã gửi cảnh báo tồn thấp, dùng để tránh gửi thông báo lặp liên tục.
+  lowStockNotifiedAt DateTime?
+  /// Thời điểm tạo và cập nhật số dư kho.
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  /// Mỗi chi nhánh chỉ có một dòng cho mỗi nguyên liệu; index ingredientId hỗ trợ tổng hợp đa chi nhánh.
+  @@unique([branchId, ingredientId])
+  @@index([ingredientId])
+}
+
+/// Một thành phần nguyên liệu trong công thức của một biến thể/size sản phẩm.
+/// quantity là định mức cho đúng một đơn vị sản phẩm và được dùng để tính lượng kho cần giữ khi đặt món.
+model VariantRecipeIngredient {
+  /// Khóa chính tự tăng của một thành phần trong công thức size sản phẩm.
+  id           Int            @id @default(autoincrement())
+  /// Biến thể/size sản phẩm sử dụng nguyên liệu; xóa biến thể sẽ xóa công thức tương ứng.
+  variantId    Int
+  variant      ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  /// Nguyên liệu cấu thành; không cho xóa khi vẫn còn được dùng trong công thức.
+  ingredientId Int
+  ingredient   Ingredient     @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+  /// Lượng nguyên liệu dùng cho một sản phẩm của đúng biến thể này.
+  quantity     Decimal        @db.Decimal(14, 3)
+
+  /// Một nguyên liệu chỉ xuất hiện một lần trong mỗi công thức biến thể.
+  @@unique([variantId, ingredientId])
+  @@index([ingredientId])
+}
+
+/// Một thành phần nguyên liệu trong công thức của một phần topping.
+/// Định mức này được cộng vào công thức món theo số lượng topping khách lựa chọn.
+model ToppingRecipeIngredient {
+  /// Khóa chính tự tăng của một thành phần trong công thức topping.
+  id           Int        @id @default(autoincrement())
+  /// Topping sử dụng nguyên liệu; xóa topping sẽ xóa công thức tương ứng.
+  toppingId    Int
+  topping      Topping    @relation(fields: [toppingId], references: [id], onDelete: Cascade)
+  /// Nguyên liệu cấu thành topping.
+  ingredientId Int
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+  /// Lượng nguyên liệu dùng cho một phần topping.
+  quantity     Decimal    @db.Decimal(14, 3)
+
+  /// Một nguyên liệu chỉ xuất hiện một lần trong mỗi công thức topping.
+  @@unique([toppingId, ingredientId])
+  @@index([ingredientId])
+}
+
+/// Snapshot công thức thực tế của từng dòng món tại thời điểm đơn được tạo.
+/// Dữ liệu được giữ độc lập với công thức hiện tại để nhân viên pha chế và lịch sử đơn luôn hiển thị đúng nguyên liệu cũ.
+model OrderItemRecipeIngredient {
+  /// Khóa chính tự tăng của dòng snapshot công thức trên món đã đặt.
+  id              Int            @id @default(autoincrement())
+  /// Dòng món trong đơn sở hữu snapshot; xóa dòng món sẽ xóa snapshot.
+  orderItemId     Int
+  orderItem       OrderItem      @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  /// Nguyên liệu gốc nếu còn tồn tại; nullable để hóa đơn cũ không mất khi nguyên liệu bị xóa.
+  ingredientId    Int?
+  ingredient      Ingredient?    @relation(fields: [ingredientId], references: [id], onDelete: SetNull)
+  /// Tên nguyên liệu được chụp tại thời điểm đặt, không đổi theo danh mục về sau.
+  ingredientName  String         @db.VarChar(120)
+  /// Đơn vị nguyên liệu được chụp tại thời điểm đặt.
+  unit            IngredientUnit
+  /// Nguồn tạo ra lượng dùng, ví dụ tên sản phẩm/size hoặc topping.
+  sourceName      String         @db.VarChar(120)
+  /// Lượng dùng cho một sản phẩm hoặc một phần topping.
+  quantityPerItem Decimal        @db.Decimal(14, 3)
+  /// Tổng lượng dùng của dòng món sau khi nhân số lượng sản phẩm và topping.
+  totalQuantity   Decimal        @db.Decimal(14, 3)
+
+  /// Tối ưu hiển thị công thức theo món và truy vết lịch sử sử dụng nguyên liệu.
+  @@index([orderItemId])
+  @@index([ingredientId])
+}
+
+/// Tổng lượng từng nguyên liệu mà một đơn hàng đang giữ, đã tiêu thụ hoặc đã hoàn trả.
+/// Bảng này bảo vệ kho khỏi bán vượt tồn trong thời gian đơn chưa đi đến trạng thái cuối.
+model OrderIngredientReservation {
+  /// Khóa chính tự tăng của lượng nguyên liệu giữ cho đơn.
+  id             Int                            @id @default(autoincrement())
+  /// Đơn hàng đang giữ hoặc đã tiêu thụ nguyên liệu; xóa đơn sẽ xóa dòng đặt giữ.
+  orderId        Int
+  order          Order                          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  /// Nguyên liệu được tổng hợp từ toàn bộ công thức món và topping trong đơn.
+  ingredientId   Int
+  ingredient     Ingredient                     @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+  /// Tổng lượng nguyên liệu cần cho đơn.
+  quantity       Decimal                        @db.Decimal(14, 3)
+  /// Vòng đời nguyên liệu của đơn: đang giữ, đã tiêu thụ hoặc đã hoàn trả.
+  state          InventoryState                 @default(RESERVED)
+  /// Chi tiết các lô đã được hệ thống phân bổ theo nguyên tắc FEFO.
+  lotAllocations OrderIngredientLotAllocation[]
+  /// Thời điểm tạo và cập nhật trạng thái đặt giữ.
+  createdAt      DateTime                       @default(now())
+  updatedAt      DateTime                       @updatedAt
+
+  /// Mỗi đơn chỉ có một dòng tổng hợp cho mỗi nguyên liệu.
+  @@unique([orderId, ingredientId])
+  @@index([ingredientId])
+}
+
+/// Sổ cái biến động kho bất biến, ghi lại mọi lần cộng/trừ tồn thực tế và lượng đang giữ.
+/// Các số dư sau giao dịch cho phép kiểm toán ngược theo chi nhánh, nguyên liệu, đơn hàng hoặc phiếu nhập.
+model InventoryMovement {
+  /// Khóa chính tự tăng của nhật ký biến động kho; bản ghi chỉ thêm, không dùng làm số dư hiện tại.
+  id               Int                   @id @default(autoincrement())
+  /// Chi nhánh phát sinh biến động.
+  branchId         Int
+  branch           StoreBranch           @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  /// Nguyên liệu bị thay đổi số dư hoặc lượng đang giữ.
+  ingredientId     Int
+  ingredient       Ingredient            @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+  /// Lô cụ thể tạo ra biến động; null dành cho lịch sử cũ chưa theo dõi lô.
+  lotId            Int?
+  lot              InventoryLot?         @relation(fields: [lotId], references: [id], onDelete: SetNull)
+  /// Đơn hàng liên quan nếu biến động do giữ, hoàn, hoặc tiêu thụ nguyên liệu.
+  orderId          Int?
+  order            Order?                @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  /// Phiếu nhập liên quan nếu biến động phát sinh từ nhập kho.
+  stockReceiptId   Int?
+  stockReceipt     StockReceipt?         @relation(fields: [stockReceiptId], references: [id], onDelete: SetNull)
+  /// Phiếu kiểm kê liên quan nếu biến động phát sinh từ chênh lệch đã được duyệt.
+  inventoryCountId Int?
+  inventoryCount   InventoryCount?       @relation(fields: [inventoryCountId], references: [id], onDelete: SetNull)
+  /// Tài khoản thực hiện thao tác; null với biến động tự động hoặc khi tài khoản đã bị xóa.
+  actorId          Int?
+  actor            User?                 @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  /// Loại nghiệp vụ: điều chỉnh, nhập, giữ, hoàn giữ hoặc tiêu thụ.
+  type             InventoryMovementType
+  /// Mức tăng/giảm tồn thực tế; số âm là trừ kho, số dương là cộng kho.
+  quantityDelta    Decimal               @db.Decimal(14, 3)
+  /// Mức tăng/giảm lượng đang giữ của đơn.
+  reservedDelta    Decimal               @db.Decimal(14, 3)
+  /// Tồn thực tế ngay sau khi áp dụng biến động, phục vụ đối soát.
+  quantityAfter    Decimal               @db.Decimal(14, 3)
+  /// Lượng đang giữ ngay sau khi áp dụng biến động.
+  reservedAfter    Decimal               @db.Decimal(14, 3)
+  /// Diễn giải nghiệp vụ hoặc lý do điều chỉnh thủ công.
+  note             String?               @db.VarChar(255)
+  /// Thời điểm biến động được ghi nhận.
+  createdAt        DateTime              @default(now())
+
+  /// Các index phục vụ sổ kho theo chi nhánh, nguyên liệu, đơn hàng và phiếu nhập.
+  @@index([branchId, createdAt])
+  @@index([ingredientId, createdAt])
+  @@index([lotId, createdAt])
+  @@index([orderId])
+  @@index([stockReceiptId])
+  @@index([inventoryCountId])
+}
+
+/// Một lô vật lý của nguyên liệu tại chi nhánh. InventoryStock vẫn là số dư tổng,
+/// còn bảng này lưu ngày sản xuất, hạn dùng, giá vốn và số lượng chi tiết để xuất FEFO.
+model InventoryLot {
+  id                 Int                            @id @default(autoincrement())
+  /// Mã nội bộ duy nhất do hệ thống sinh; batchCode là mã in trên bao bì của nhà cung cấp.
+  code               String                         @unique @db.VarChar(50)
+  batchCode          String?                        @db.VarChar(80)
+  branchId           Int
+  branch             StoreBranch                    @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  ingredientId       Int
+  ingredient         Ingredient                     @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+  stockReceiptItemId Int?
+  stockReceiptItem   StockReceiptItem?              @relation(fields: [stockReceiptItemId], references: [id], onDelete: SetNull)
+  manufacturedAt     DateTime?                      @db.Date
+  expiresAt          DateTime?                      @db.Date
+  receivedAt         DateTime
+  initialQuantity    Decimal                        @db.Decimal(14, 3)
+  /// Tồn vật lý và lượng đang giữ của riêng lô; có thể dùng = quantity - reservedQuantity.
+  quantity           Decimal                        @db.Decimal(14, 3)
+  reservedQuantity   Decimal                        @default(0) @db.Decimal(14, 3)
+  /// Giá nhập được chụp theo lô để tính giá vốn sau này.
+  unitCost           Decimal                        @default(0) @db.Decimal(14, 2)
+  status             InventoryLotStatus             @default(ACTIVE)
+  /// Đánh dấu lô được tạo khi chuyển dữ liệu tồn kho cũ sang cơ chế quản lý lô.
+  isLegacy           Boolean                        @default(false)
+  expiryNotifiedAt   DateTime?
+  note               String?                        @db.VarChar(255)
+  allocations        OrderIngredientLotAllocation[]
+  movements          InventoryMovement[]
+  disposals          InventoryLotDisposal[]
+  createdAt          DateTime                       @default(now())
+  updatedAt          DateTime                       @updatedAt
+
+  @@index([branchId, expiresAt])
+  @@index([ingredientId, expiresAt])
+  @@index([stockReceiptItemId])
+  @@index([status])
+}
+
+/// Phân bổ một lượng nguyên liệu của đơn vào đúng lô được chọn theo FEFO.
+/// unitCost và costAmount là snapshot, giúp truy ngược giá vốn ngay cả khi giá lô thay đổi.
+model OrderIngredientLotAllocation {
+  id            Int                        @id @default(autoincrement())
+  orderId       Int
+  order         Order                      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  reservationId Int
+  reservation   OrderIngredientReservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  lotId         Int
+  lot           InventoryLot               @relation(fields: [lotId], references: [id], onDelete: Restrict)
+  quantity      Decimal                    @db.Decimal(14, 3)
+  unitCost      Decimal                    @db.Decimal(14, 2)
+  costAmount    Decimal                    @db.Decimal(16, 2)
+  state         InventoryState             @default(RESERVED)
+  createdAt     DateTime                   @default(now())
+  updatedAt     DateTime                   @updatedAt
+
+  @@unique([reservationId, lotId])
+  @@index([orderId])
+  @@index([lotId, state])
+}
+
+/// Biên bản hủy một phần hoặc toàn bộ lô do hết hạn, hư hỏng, thất thoát hoặc nguyên nhân khác.
+model InventoryLotDisposal {
+  id           Int                     @id @default(autoincrement())
+  lotId        Int
+  lot          InventoryLot            @relation(fields: [lotId], references: [id], onDelete: Restrict)
+  branchId     Int
+  branch       StoreBranch             @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  ingredientId Int
+  ingredient   Ingredient              @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+  actorId      Int?
+  actor        User?                   @relation("InventoryLotDisposalActor", fields: [actorId], references: [id], onDelete: SetNull)
+  quantity     Decimal                 @db.Decimal(14, 3)
+  reason       InventoryVarianceReason
+  note         String?                 @db.VarChar(255)
+  createdAt    DateTime                @default(now())
+
+  @@index([lotId, createdAt])
+  @@index([branchId, createdAt])
+}
+
+/// Phiếu kiểm kê ghi nhận số lượng hệ thống và số lượng đếm thực tế tại một thời điểm.
+/// Chỉ phiếu APPROVED mới tạo biến động ADJUST và thay đổi tồn kho.
+model InventoryCount {
+  id           Int                  @id @default(autoincrement())
+  code         String               @unique @db.VarChar(40)
+  branchId     Int
+  branch       StoreBranch          @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  createdById  Int
+  createdBy    User                 @relation("InventoryCountCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  reviewedById Int?
+  reviewedBy   User?                @relation("InventoryCountReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  status       InventoryCountStatus @default(DRAFT)
+  countedAt    DateTime
+  note         String?              @db.VarChar(500)
+  reviewNote   String?              @db.VarChar(500)
+  submittedAt  DateTime?
+  reviewedAt   DateTime?
+  items        InventoryCountItem[]
+  movements    InventoryMovement[]
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  @@index([branchId, countedAt])
+  @@index([status, createdAt])
+  @@index([createdById, createdAt])
+}
+
+/// Dòng nguyên liệu trên phiếu kiểm kê. differenceQuantity = countedQuantity - expectedQuantity.
+model InventoryCountItem {
+  id                 Int                      @id @default(autoincrement())
+  inventoryCountId   Int
+  inventoryCount     InventoryCount           @relation(fields: [inventoryCountId], references: [id], onDelete: Cascade)
+  ingredientId       Int
+  ingredient         Ingredient               @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+  expectedQuantity   Decimal                  @db.Decimal(14, 3)
+  countedQuantity    Decimal                  @db.Decimal(14, 3)
+  differenceQuantity Decimal                  @db.Decimal(14, 3)
+  reason             InventoryVarianceReason?
+  note               String?                  @db.VarChar(255)
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+
+  @@unique([inventoryCountId, ingredientId])
+  @@index([ingredientId])
+}
+
+/// Hồ sơ nhà cung cấp dùng khi lập và tra cứu phiếu nhập kho.
+/// Nhà cung cấp ngừng hoạt động vẫn được giữ lại để bảo toàn lịch sử giao dịch.
+model Supplier {
+  /// Khóa chính tự tăng của nhà cung cấp.
+  id          Int     @id @default(autoincrement())
+  /// Mã nhà cung cấp duy nhất dùng khi lập và tra cứu phiếu nhập.
+  code        String  @unique @db.VarChar(30)
+  /// Tên pháp lý hoặc tên giao dịch của đơn vị cung cấp.
+  name        String  @db.VarChar(150)
+  /// Người phụ trách liên hệ phía nhà cung cấp.
+  contactName String? @db.VarChar(100)
+  /// Số điện thoại liên hệ.
+  phone       String? @db.VarChar(20)
+  /// Email liên hệ.
+  email       String? @db.VarChar(150)
+  /// Địa chỉ giao dịch hoặc giao hàng.
+  address     String? @db.VarChar(255)
+  /// Điều khoản, lịch giao hoặc thông tin cần lưu ý.
+  note        String? @db.VarChar(500)
+  /// False nghĩa là ngừng chọn nhà cung cấp cho phiếu mới nhưng vẫn giữ lịch sử.
+  isActive    Boolean @default(true)
+
+  /// Các phiếu nhập và đơn đặt đã lập với nhà cung cấp.
+  stockReceipts  StockReceipt[]
+  purchaseOrders PurchaseOrder[]
+
+  /// Thời điểm tạo và cập nhật hồ sơ nhà cung cấp.
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+  @@index([isActive])
+}
+
+/// Phiếu nhập nguyên liệu cho một chi nhánh từ một nhà cung cấp.
+/// Chỉ phiếu COMPLETED mới cộng vào tồn thực tế và sinh các dòng InventoryMovement để đối soát.
+model StockReceipt {
+  /// Khóa chính tự tăng của phiếu nhập kho.
+  id              Int                @id @default(autoincrement())
+  /// Mã phiếu nhập duy nhất dùng để đối soát.
+  code            String             @unique @db.VarChar(40)
+  /// Chi nhánh nhận hàng; không cho xóa chi nhánh khi còn phiếu lịch sử.
+  branchId        Int
+  branch          StoreBranch        @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  /// Nhà cung cấp giao hàng cho phiếu.
+  supplierId      Int
+  supplier        Supplier           @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  /// Đơn đặt hàng nguồn nếu phiếu được tạo khi nhận một phần hoặc toàn bộ hàng đã đặt.
+  purchaseOrderId Int?
+  purchaseOrder   PurchaseOrder?     @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+  /// Tài khoản Admin lập phiếu nhập.
+  createdById     Int
+  createdBy       User               @relation("StockReceiptCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  /// DRAFT chưa cộng kho; COMPLETED đã cộng kho; CANCELLED đã hủy và không được cộng kho.
+  status          StockReceiptStatus @default(DRAFT)
+  /// Thời điểm hàng thực tế được xác nhận nhập kho.
+  receivedAt      DateTime?
+  /// Ghi chú giao nhận hoặc nội dung đối soát của phiếu.
+  note            String?            @db.VarChar(500)
+  /// Tổng giá trị phiếu, bằng tổng lineTotal của các dòng nguyên liệu.
+  totalCost       Decimal            @default(0) @db.Decimal(16, 2)
+
+  /// Chi tiết nguyên liệu và các biến động kho phát sinh khi hoàn tất phiếu.
+  items     StockReceiptItem[]
+  movements InventoryMovement[]
+
+  /// Thời điểm tạo và cập nhật phiếu.
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Tối ưu lịch sử phiếu theo chi nhánh, nhà cung cấp và trạng thái.
+  @@index([branchId, createdAt])
+  @@index([supplierId, createdAt])
+  @@index([purchaseOrderId])
+  @@index([status, createdAt])
+}
+
+/// Dòng nguyên liệu chi tiết của phiếu nhập, gồm số lượng, đơn giá và thành tiền tại thời điểm lập.
+/// Mỗi nguyên liệu chỉ được xuất hiện một lần trong cùng một phiếu.
+model StockReceiptItem {
+  /// Khóa chính tự tăng của dòng chi tiết phiếu nhập.
+  id                  Int                @id @default(autoincrement())
+  /// Phiếu nhập sở hữu dòng; xóa phiếu nháp sẽ xóa toàn bộ chi tiết.
+  receiptId           Int
+  receipt             StockReceipt       @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  /// Nguyên liệu được nhập; không cho xóa nguyên liệu khi còn lịch sử phiếu.
+  ingredientId        Int
+  ingredient          Ingredient         @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+  /// Dòng đơn đặt hàng tương ứng nếu nguyên liệu được nhận theo đơn đã duyệt.
+  purchaseOrderItemId Int?
+  purchaseOrderItem   PurchaseOrderItem? @relation(fields: [purchaseOrderItemId], references: [id], onDelete: SetNull)
+  /// Số lượng nhập theo đơn vị chuẩn của nguyên liệu.
+  quantity            Decimal            @db.Decimal(14, 3)
+  /// Đơn giá nhập cho một đơn vị nguyên liệu.
+  unitCost            Decimal            @db.Decimal(14, 2)
+  /// Thành tiền của dòng, bằng quantity nhân unitCost tại thời điểm lưu.
+  lineTotal           Decimal            @db.Decimal(16, 2)
+  /// Thông tin lô được ghi nhận trên phiếu nháp và dùng để tạo InventoryLot khi hoàn tất.
+  batchCode           String?            @db.VarChar(80)
+  manufacturedAt      DateTime?          @db.Date
+  expiresAt           DateTime?          @db.Date
+  lotNote             String?            @db.VarChar(255)
+  lots                InventoryLot[]
+
+  /// Thời điểm tạo và cập nhật dòng phiếu.
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Một nguyên liệu chỉ xuất hiện một lần trên mỗi phiếu nhập.
+  @@unique([receiptId, ingredientId])
+  @@index([ingredientId])
+  @@index([purchaseOrderItemId])
+}
+
+/// Đề xuất nhập hàng kiêm đơn đặt nhà cung cấp cho một chi nhánh.
+/// Chỉ Admin được duyệt và xác nhận đã đặt; mỗi lần nhận hàng sinh một StockReceipt COMPLETED.
+model PurchaseOrder {
+  /// Khóa chính tự tăng và mã nghiệp vụ duy nhất dùng khi trao đổi với nhà cung cấp.
+  id   Int    @id @default(autoincrement())
+  code String @unique @db.VarChar(40)
+
+  /// Chi nhánh cần hàng và nhà cung cấp được chọn cho đơn.
+  branchId   Int
+  branch     StoreBranch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  supplierId Int
+  supplier   Supplier    @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+
+  /// Người lập đề xuất và Admin xử lý phê duyệt hoặc từ chối.
+  createdById  Int
+  createdBy    User  @relation("PurchaseOrderCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  reviewedById Int?
+  reviewedBy   User? @relation("PurchaseOrderReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  /// Trạng thái nghiệp vụ; COMPLETED nghĩa là tổng số nhận đã bằng tổng số đặt.
+  status     PurchaseOrderStatus @default(DRAFT)
+  /// Ngày dự kiến nhà cung cấp giao hàng, có thể điều chỉnh trước khi gửi duyệt.
+  expectedAt DateTime?           @db.Date
+  /// Ghi chú đặt hàng và phản hồi duyệt của Admin.
+  note       String?             @db.VarChar(500)
+  reviewNote String?             @db.VarChar(500)
+  /// Tổng giá trị dự kiến bằng tổng số đặt nhân đơn giá của từng dòng.
+  totalCost  Decimal             @default(0) @db.Decimal(16, 2)
+
+  /// Các mốc thời gian giúp truy vết thời gian duyệt, đặt và nhận hàng.
+  submittedAt DateTime?
+  reviewedAt  DateTime?
+  orderedAt   DateTime?
+  completedAt DateTime?
+  cancelledAt DateTime?
+
+  /// Chi tiết đặt hàng và các lần giao nhận phát sinh từ đơn.
+  items    PurchaseOrderItem[]
+  receipts StockReceipt[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([branchId, createdAt])
+  @@index([supplierId, createdAt])
+  @@index([status, createdAt])
+  @@index([createdById, createdAt])
+}
+
+/// Dòng nguyên liệu trên đơn đặt, lưu cả căn cứ gợi ý tại thời điểm lập và tiến độ nhận thực tế.
+model PurchaseOrderItem {
+  id              Int           @id @default(autoincrement())
+  purchaseOrderId Int
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  ingredientId    Int
+  ingredient      Ingredient    @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+
+  /// Snapshot dùng để giải thích đề xuất và giữ nguyên lịch sử dù tồn kho thay đổi về sau.
+  availableSnapshot    Decimal @default(0) @db.Decimal(14, 3)
+  minimumLevelSnapshot Decimal @default(0) @db.Decimal(14, 3)
+  averageDailyUsage    Decimal @default(0) @db.Decimal(14, 3)
+  incomingSnapshot     Decimal @default(0) @db.Decimal(14, 3)
+  suggestedQuantity    Decimal @default(0) @db.Decimal(14, 3)
+
+  /// Số lượng đã đặt, số đã nhận cộng dồn và đơn giá dự kiến trên một đơn vị chuẩn.
+  orderedQuantity  Decimal @db.Decimal(14, 3)
+  receivedQuantity Decimal @default(0) @db.Decimal(14, 3)
+  unitCost         Decimal @db.Decimal(14, 2)
+  lineTotal        Decimal @db.Decimal(16, 2)
+  note             String? @db.VarChar(255)
+
+  /// Các dòng nhận hàng liên kết ngược để đối chiếu giao nhiều lần.
+  stockReceiptItems StockReceiptItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([purchaseOrderId, ingredientId])
+  @@index([ingredientId])
+}
+
+/// Một bản ghi tương ứng một lần vào ca và ra ca thực tế của nhân viên.
+/// openKey chỉ có giá trị khi ca đang mở và là khóa duy nhất để chống chấm vào nhiều ca đồng thời.
+model StaffAttendance {
+  /// Khóa chính tự tăng của lần chấm công thực tế.
+  id Int @id @default(autoincrement())
+
+  /// Nhân viên được ghi nhận giờ làm; giữ lịch sử nếu tài khoản bị khóa.
+  employeeId Int
+  employee   User @relation("AttendanceEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+
+  /// Chi nhánh phát sinh lần chấm công, dùng để phân quyền trưởng chi nhánh.
+  branchId Int
+  branch   StoreBranch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  /// Người thực hiện lần ghi nhận hoặc điều chỉnh gần nhất; có thể là nhân viên tự điểm danh hoặc trưởng chi nhánh.
+  recordedById Int?
+  recordedBy   User? @relation("AttendanceRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+
+  /// Ca được xếp trước mà lần chấm công này đang thực hiện; null với dữ liệu chấm công cũ.
+  scheduledShiftId Int?
+  scheduledShift   StaffShift? @relation(fields: [scheduledShiftId], references: [id], onDelete: SetNull)
+
+  /// Thời điểm nhân viên bắt đầu làm thực tế, lưu theo mốc thời gian UTC.
+  clockIn      DateTime  @default(now())
+  /// Thời điểm kết thúc thực tế; null nghĩa là nhân viên vẫn đang trong ca.
+  clockOut     DateTime?
+  /// True khi hệ thống tự mở ca kế tiếp trong một chuỗi ca liền nhau.
+  autoClockIn  Boolean   @default(false)
+  /// True khi hệ thống tự đóng đúng giờ kết thúc để không phát sinh tăng ca do quên thao tác.
+  autoClockOut Boolean   @default(false)
+  /// Lý do điều chỉnh chấm công do trưởng chi nhánh nhập; không dùng để quyết định trạng thái đi trễ/về sớm.
+  note         String?   @db.VarChar(255)
+  /// Khóa tạm dạng employee:{id}, chỉ tồn tại khi ca đang mở để chống một nhân viên mở nhiều ca cùng lúc.
+  openKey      String?   @unique @db.VarChar(50)
+
+  /// Thời điểm tạo và cập nhật lần chấm công.
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Tối ưu bảng công theo chi nhánh/ngày, lịch sử nhân viên và việc ghép ca dự kiến.
+  @@index([branchId, clockIn])
+  @@index([employeeId, clockIn])
+  @@index([scheduledShiftId])
+}
+
+/// Ca làm dự kiến do trưởng chi nhánh xếp cho nhân viên; thời gian lưu UTC và hiển thị theo múi giờ cửa hàng.
+/// Ca là căn cứ mở điểm danh, tính đúng giờ, đi trễ, về sớm, vắng mặt, nghỉ phép và tăng ca.
+model StaffShift {
+  /// Khóa chính tự tăng của ca làm.
+  id Int @id @default(autoincrement())
+
+  /// Nhân viên thường được phân công vào ca.
+  employeeId Int
+  employee   User @relation("ShiftEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+
+  /// Chi nhánh nơi nhân viên thực hiện ca làm.
+  branchId Int
+  branch   StoreBranch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  /// Thời điểm dự kiến vào và ra ca; ứng dụng gửi theo ISO/UTC.
+  startAt DateTime
+  endAt   DateTime
+  /// Nội dung phân công thêm, ví dụ vị trí quầy hoặc công việc trong ca.
+  note    String?  @db.VarChar(255)
+
+  /// Tài khoản trưởng chi nhánh đã tạo ca; giữ ca nếu tài khoản người tạo bị xóa.
+  createdById Int?
+  createdBy   User? @relation("ShiftCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  /// Các lần chấm công thực tế được nối với ca đã xếp.
+  attendances   StaffAttendance[]
+  /// Các đơn xin nghỉ gắn với ca; ca có đơn nghỉ không được xóa để giữ lịch sử.
+  leaveRequests StaffLeaveRequest[]
+
+  /// Thời điểm tạo và cập nhật bản ghi lịch làm.
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Không cho một nhân viên có hai ca bắt đầu cùng một thời điểm.
+  @@unique([employeeId, startAt])
+  /// Tối ưu tải lịch theo chi nhánh/tuần và kiểm tra ca trùng của nhân viên.
+  @@index([branchId, startAt])
+  @@index([employeeId, startAt, endAt])
+}
+
+/// Yêu cầu nghỉ gắn với một ca cụ thể để phân biệt nghỉ có phép với vắng mặt.
+/// Bảng lưu cả nội dung xin nghỉ, trường hợp đột xuất, người duyệt, thời gian xử lý và lý do từ chối.
+model StaffLeaveRequest {
+  /// Khóa chính tự tăng của đơn xin nghỉ.
+  id Int @id @default(autoincrement())
+
+  /// Nhân viên gửi đơn; mỗi nhân viên chỉ có một đơn cho một ca.
+  employeeId Int
+  employee   User @relation("LeaveRequestEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+
+  /// Chi nhánh tiếp nhận và xét duyệt đơn tại thời điểm nhân viên gửi.
+  branchId Int
+  branch   StoreBranch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  /// Ca cụ thể mà nhân viên xin nghỉ; dùng để loại khỏi vắng mặt khi đơn được duyệt.
+  staffShiftId Int
+  staffShift   StaffShift @relation(fields: [staffShiftId], references: [id], onDelete: Restrict)
+
+  /// PLANNED là nghỉ báo trước tối thiểu 48 giờ; EMERGENCY là nghỉ đột xuất sát giờ hoặc trong ngày.
+  type             StaffLeaveType
+  /// FULL_SHIFT là nghỉ cả ca; LATE_ARRIVAL đến tại requestedStartAt; EARLY_LEAVE kết thúc tại requestedEndAt.
+  scope            StaffLeaveScope  @default(FULL_SHIFT)
+  /// Mốc nhân viên dự kiến đến làm; bắt buộc và phải nằm giữa startAt/endAt khi scope là LATE_ARRIVAL.
+  /// Khi được duyệt, phần từ đầu ca tới mốc này không bị phạt đi trễ nhưng vẫn không tính lương.
+  requestedStartAt DateTime?
+  /// Mốc nhân viên đề nghị kết thúc ca; bắt buộc và phải nằm giữa startAt/endAt khi scope là EARLY_LEAVE.
+  /// Khi đơn được duyệt, phần từ mốc này đến cuối ca được coi là về sớm có phép và không bị phạt thêm.
+  requestedEndAt   DateTime?
+  /// Trạng thái xử lý hiện tại: chờ duyệt, cần bổ sung, đã duyệt, từ chối hoặc nhân viên đã hủy.
+  status           StaffLeaveStatus @default(PENDING)
+
+  /// Lý do nhân viên cung cấp; có thể được cập nhật khi trưởng yêu cầu bổ sung.
+  reason      String  @db.VarChar(500)
+  /// URL ảnh hoặc PDF minh chứng tùy chọn, tối đa 5 MB theo kiểm tra tại API upload.
+  evidenceUrl String? @db.VarChar(500)
+
+  /// Phản hồi gần nhất của trưởng chi nhánh; bắt buộc khi từ chối hoặc yêu cầu bổ sung.
+  reviewNote   String?   @db.VarChar(500)
+  /// Trưởng chi nhánh thực hiện quyết định gần nhất; null khi đơn chưa được xử lý.
+  reviewedById Int?
+  reviewedBy   User?     @relation("LeaveRequestReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  /// Thời điểm trưởng chi nhánh đưa ra quyết định gần nhất.
+  reviewedAt   DateTime?
+
+  /// Các lần mời nhân viên ca trước làm thay; giữ cả lời mời bị từ chối hoặc được phân công lại.
+  coverages StaffShiftCoverage[]
+
+  /// Thời điểm gửi đơn và thời điểm đơn được cập nhật gần nhất.
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Một nhân viên không thể gửi hai đơn cho cùng ca; các index còn lại tối ưu màn hình duyệt và lịch sử cá nhân.
+  @@unique([employeeId, staffShiftId])
+  @@index([branchId, status, createdAt])
+  @@index([employeeId, createdAt])
+  @@index([staffShiftId])
+}
+
+/// Phân công nhân viên ca trước ở lại làm thay trong lúc nhân viên ca sau được phép đến trễ.
+/// Bảng lưu xác nhận độc lập để không tự ý tính tăng ca khi người được phân công chưa đồng ý.
+model StaffShiftCoverage {
+  /// Khóa chính tự tăng của lần phân công làm thay.
+  id Int @id @default(autoincrement())
+
+  /// Đơn xin đến trễ phát sinh lời mời; một đơn có thể có nhiều lần mời để giữ lịch sử phân công lại.
+  leaveRequestId Int
+  leaveRequest   StaffLeaveRequest @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade)
+
+  /// Chi nhánh phát sinh phân công để giới hạn dữ liệu theo trưởng chi nhánh.
+  branchId Int
+  branch   StoreBranch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  /// Nhân viên ca trước được đề nghị ở lại làm thay.
+  coveringEmployeeId Int
+  coveringEmployee   User @relation("ShiftCoverageEmployee", fields: [coveringEmployeeId], references: [id], onDelete: Restrict)
+
+  /// Trưởng chi nhánh tạo hoặc đổi phân công.
+  assignedById Int
+  assignedBy   User @relation("ShiftCoverageAssigner", fields: [assignedById], references: [id], onDelete: Restrict)
+
+  /// Khoảng làm thay dự kiến: từ lúc ca sau bắt đầu tới giờ người xin phép dự kiến đến.
+  startAt     DateTime
+  endAt       DateTime
+  /// Mốc kết thúc thực tế khi người xin phép đến sớm hoặc hệ thống tự đóng tại giờ đã duyệt.
+  actualEndAt DateTime?
+
+  /// PENDING chờ người làm thay phản hồi; ACCEPTED mới cho phép nối giờ làm và tính tăng ca.
+  status      StaffShiftCoverageStatus @default(PENDING)
+  respondedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([branchId, status, startAt])
+  @@index([coveringEmployeeId, status, startAt])
+  @@index([leaveRequestId, createdAt])
+}
+
+/// Khung giờ chuẩn theo chi nhánh dùng làm lựa chọn mặc định khi trưởng chi nhánh xếp lịch.
+/// Việc sửa mẫu chỉ ảnh hưởng lần xếp lịch sau; các StaffShift đã tạo giữ nguyên thời gian cũ.
+model StaffShiftTemplate {
+  /// Khóa chính tự tăng của khung ca chuẩn.
+  id Int @id @default(autoincrement())
+
+  /// Chi nhánh áp dụng khung giờ; xóa chi nhánh sẽ xóa các mẫu ca tương ứng.
+  branchId Int
+  branch   StoreBranch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  /// Buổi của ca chuẩn: MORNING, AFTERNOON hoặc EVENING; mỗi chi nhánh chỉ có một mẫu cho mỗi buổi.
+  period    StaffShiftPeriod
+  /// Giờ bắt đầu theo giờ Việt Nam, chỉ lưu chuỗi HH:mm vì đây là mẫu lặp theo ngày.
+  startTime String           @db.VarChar(5)
+  /// Giờ kết thúc theo giờ Việt Nam, phải sau startTime và không được chồng lấn mẫu ca kế tiếp.
+  endTime   String           @db.VarChar(5)
+
+  /// Thời điểm tạo và cập nhật cấu hình khung ca.
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Khóa kép giữ duy nhất một mẫu mỗi buổi; index branchId tối ưu tải cấu hình chi nhánh.
+  @@unique([branchId, period])
+  @@index([branchId])
+}
+
+/// Một kỳ bảng lương theo tháng của một chi nhánh.
+/// Kỳ nháp được tính lại từ chấm công; khi chốt, toàn bộ số tiền và đơn giá được khóa tại các dòng chi tiết.
+model StaffPayrollPeriod {
+  id Int @id @default(autoincrement())
+
+  branchId Int
+  branch   StoreBranch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  /// Ngày đầu và ngày đầu tháng kế tiếp, lưu kiểu DATE để xác định chính xác phạm vi kỳ lương.
+  periodStart DateTime           @db.Date
+  periodEnd   DateTime           @db.Date
+  status      StaffPayrollStatus @default(DRAFT)
+
+  finalizedAt   DateTime?
+  finalizedById Int?
+  finalizedBy   User?     @relation("PayrollFinalizer", fields: [finalizedById], references: [id], onDelete: SetNull)
+
+  /// Thông tin chi trả chỉ được ghi sau khi kỳ lương đã chốt.
+  paidAt           DateTime?
+  paidById         Int?
+  paidBy           User?                      @relation("PayrollPayer", fields: [paidById], references: [id], onDelete: SetNull)
+  paymentMethod    StaffPayrollPaymentMethod?
+  paymentReference String?                    @db.VarChar(100)
+
+  /// Kỳ bảng công tháng đã được đối soát; phải APPROVED trước khi kỳ lương được chốt.
+  attendancePeriodId Int?                   @unique
+  attendancePeriod   StaffAttendancePeriod? @relation(fields: [attendancePeriodId], references: [id], onDelete: SetNull)
+
+  entries StaffPayrollEntry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([branchId, periodStart])
+  @@index([status, periodStart])
+}
+
+/// Phiên bản đối soát bảng công theo tháng của một chi nhánh.
+/// PENDING và APPROVED khóa lịch/chấm công; RETURNED mở lại để trưởng chi nhánh sửa và gửi lại.
+model StaffAttendancePeriod {
+  id Int @id @default(autoincrement())
+
+  branchId Int
+  branch   StoreBranch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  /// Ngày đầu tháng và ngày đầu tháng kế tiếp, đồng nhất với StaffPayrollPeriod.
+  periodStart DateTime                    @db.Date
+  periodEnd   DateTime                    @db.Date
+  status      StaffAttendancePeriodStatus @default(DRAFT)
+  /// Tăng sau mỗi lần trưởng chi nhánh gửi lại để phân biệt các vòng đối soát.
+  revision    Int                         @default(1)
+
+  submittedAt   DateTime?
+  submittedById Int?
+  submittedBy   User?     @relation("AttendancePeriodSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
+
+  reviewedAt   DateTime?
+  reviewedById Int?
+  reviewedBy   User?     @relation("AttendancePeriodReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  /// Lý do gần nhất khi Admin trả lại hoặc mở lại kỳ đã duyệt.
+  reviewNote   String?   @db.VarChar(500)
+
+  payrollPeriod StaffPayrollPeriod?
+  events        StaffAttendancePeriodEvent[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([branchId, periodStart])
+  @@index([status, periodStart])
+}
+
+/// Nhật ký không sửa/xóa của mọi lần gửi, duyệt, trả lại và mở lại bảng công.
+model StaffAttendancePeriodEvent {
+  id Int @id @default(autoincrement())
+
+  attendancePeriodId Int
+  attendancePeriod   StaffAttendancePeriod @relation(fields: [attendancePeriodId], references: [id], onDelete: Cascade)
+
+  action     StaffAttendancePeriodAction
+  fromStatus StaffAttendancePeriodStatus
+  toStatus   StaffAttendancePeriodStatus
+  note       String?                     @db.VarChar(500)
+
+  actorId Int?
+  actor   User? @relation("AttendancePeriodEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([attendancePeriodId, createdAt])
+  @@index([actorId])
+}
+
+/// Dòng lương đã tổng hợp cho một nhân viên trong một kỳ.
+/// Các trường tiền và thời gian là snapshot để kỳ đã chốt không phụ thuộc dữ liệu về sau.
+model StaffPayrollEntry {
+  id Int @id @default(autoincrement())
+
+  payrollPeriodId Int
+  payrollPeriod   StaffPayrollPeriod @relation(fields: [payrollPeriodId], references: [id], onDelete: Cascade)
+
+  employeeId Int
+  employee   User @relation("PayrollEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+
+  hourlyRateSnapshot         Decimal @db.Decimal(12, 2)
+  overtimeMultiplierSnapshot Decimal @db.Decimal(4, 2)
+
+  regularSeconds  Int @default(0)
+  overtimeSeconds Int @default(0)
+
+  scheduledShifts            Int   @default(0)
+  completedShifts            Int   @default(0)
+  /// Phân loại chấm công: ca theo lịch (đếm duy nhất), lượt ngoài lịch, lượt thuộc lịch kỳ khác,
+  /// lượt dưới một phút và lượt có thời gian không hợp lệ. Snapshot được giữ nguyên khi chốt.
+  /// Null với kỳ cũ chưa có phân loại; không suy đoán hoặc tính lại dữ liệu kỳ đã chốt.
+  attendanceBreakdown        Json?
+  lateMinutes                Int   @default(0)
+  earlyLeaveMinutes          Int   @default(0)
+  /// Số phút về trước mốc được duyệt; nếu không có đơn được duyệt thì bằng toàn bộ số phút về sớm.
+  unexcusedEarlyLeaveMinutes Int   @default(0)
+  absentShifts               Int   @default(0)
+  /// Tổng số giây của các ca đã kết thúc nhưng nhân viên không chấm công và không có đơn nghỉ được duyệt.
+  unexcusedAbsentSeconds     Int   @default(0)
+  excusedLeaveShifts         Int   @default(0)
+
+  baseAmount                Decimal @default(0) @db.Decimal(14, 2)
+  overtimeAmount            Decimal @default(0) @db.Decimal(14, 2)
+  bonusAmount               Decimal @default(0) @db.Decimal(14, 2)
+  deductionAmount           Decimal @default(0) @db.Decimal(14, 2)
+  /// Khoản khấu trừ tự động do đi trễ, chụp lại theo phút trễ và mức lương của kỳ.
+  lateDeductionAmount       Decimal @default(0) @db.Decimal(14, 2)
+  /// Khấu trừ tự động = unexcusedEarlyLeaveMinutes / 60 * hourlyRateSnapshot, làm tròn đến đồng.
+  /// Đây là khoản phạt thêm; baseAmount vốn chỉ tính thời gian chấm công thực tế.
+  earlyLeaveDeductionAmount Decimal @default(0) @db.Decimal(14, 2)
+  /// Khấu trừ vắng không phép = unexcusedAbsentSeconds / 3600 * hourlyRateSnapshot * 50%, làm tròn đến đồng.
+  /// Nghỉ cả ca đã được duyệt không được cộng vào số giây này và không phát sinh khoản phạt.
+  absenceDeductionAmount    Decimal @default(0) @db.Decimal(14, 2)
+  totalAmount               Decimal @default(0) @db.Decimal(14, 2)
+
+  adjustments StaffPayrollAdjustment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([payrollPeriodId, employeeId])
+  @@index([employeeId])
+}
+
+/// Một khoản thưởng hoặc khấu trừ do người quản lý nhập trên dòng lương nháp.
+model StaffPayrollAdjustment {
+  id Int @id @default(autoincrement())
+
+  payrollEntryId Int
+  payrollEntry   StaffPayrollEntry @relation(fields: [payrollEntryId], references: [id], onDelete: Cascade)
+
+  type   StaffPayrollAdjustmentType
+  amount Decimal                    @db.Decimal(14, 2)
+  reason String                     @db.VarChar(255)
+
+  createdById Int?
+  createdBy   User? @relation("PayrollAdjustmentCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([payrollEntryId, createdAt])
 }

@@ -131,7 +131,7 @@ export default function AdminReviewsPage() {
           setLoading(true);
 
           const accessToken =
-            localStorage.getItem(
+            sessionStorage.getItem(
               "accessToken",
             );
 
@@ -327,7 +327,7 @@ export default function AdminReviewsPage() {
       );
 
       const accessToken =
-        localStorage.getItem(
+        sessionStorage.getItem(
           "accessToken",
         );
 
@@ -399,7 +399,7 @@ export default function AdminReviewsPage() {
       setUpdatingId(review.id);
 
       const accessToken =
-        localStorage.getItem(
+        sessionStorage.getItem(
           "accessToken",
         );
 
@@ -461,7 +461,7 @@ export default function AdminReviewsPage() {
       );
 
       const accessToken =
-        localStorage.getItem(
+        sessionStorage.getItem(
           "accessToken",
         );
 

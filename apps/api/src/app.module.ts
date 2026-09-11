@@ -21,6 +21,15 @@ import { UploadsModule } from './uploads/uploads.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { AddressesModule } from './addresses/addresses.module';
+import { FavoritesModule } from './favorites/favorites.module';
+import { StoreSettingsModule } from './store-settings/store-settings.module';
+import { InventoryModule } from './inventory/inventory.module';
+import { StaffSchedulesModule } from './staff-schedules/staff-schedules.module';
+import { StaffLeavesModule } from './staff-leaves/staff-leaves.module';
+import { PayrollModule } from './payroll/payroll.module';
+import { AuditLogsModule } from './audit-logs/audit-logs.module';
+import { ExpensesModule } from './expenses/expenses.module';
+import { CashSessionsModule } from './cash-sessions/cash-sessions.module';
 
 @Module({
   imports: [
@@ -77,6 +86,33 @@ import { AddressesModule } from './addresses/addresses.module';
 
     // Sổ địa chỉ giao hàng của khách hàng.
     AddressesModule,
+
+    // Danh sách sản phẩm yêu thích của user.
+    FavoritesModule,
+
+    // Trạng thái mở cửa và phương thức nhận đơn dùng chung toàn hệ thống.
+    StoreSettingsModule,
+
+    // Nguyên liệu, công thức và tồn kho theo chi nhánh.
+    InventoryModule,
+
+    // Lịch làm theo tuần và quy tắc mở điểm danh trước ca 5 phút.
+    StaffSchedulesModule,
+
+    // Xin nghỉ theo ca, duyệt nghỉ và xử lý nghỉ đột xuất.
+    StaffLeavesModule,
+
+    // Tính lương từ bảng công, thưởng/khấu trừ và khóa kỳ lương theo tháng.
+    PayrollModule,
+
+    // Nhật ký bất biến cho các thay đổi nhạy cảm trong vận hành.
+    AuditLogsModule,
+
+    // Khoản chi vận hành theo chi nhánh và luồng Admin duyệt.
+    ExpensesModule,
+
+    // Đối soát tiền mặt theo ngày, trưởng chi nhánh đóng và Admin khóa sổ.
+    CashSessionsModule,
   ],
 
   providers: [

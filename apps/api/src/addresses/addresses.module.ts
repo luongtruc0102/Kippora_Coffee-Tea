@@ -4,16 +4,10 @@ import { AddressesController } from './addresses.controller';
 import { AddressesService } from './addresses.service';
 
 @Module({
-  controllers: [
-    AddressesController,
-  ],
+  controllers: [AddressesController],
 
-  providers: [
-    AddressesService,
-  ],
+  providers: [AddressesService],
 
-  exports: [
-    AddressesService,
-  ],
+  exports: [AddressesService],
 })
 export class AddressesModule {}

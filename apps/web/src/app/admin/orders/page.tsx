@@ -9,7 +9,12 @@ import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import OrderDetailModal from "@/components/admin/order-detail-modal";
 import ToastMessage from "@/components/ui/toast-message";
 
-import { getAdminOrders, updateOrderStatus } from "@/services/order.service";
+import {
+  cancelManagedOrder,
+  getAdminOrders,
+  updateOrderStatus,
+  type CancelManagedOrderInput,
+} from "@/services/order.service";
 
 import type { Order, OrderStatus } from "@/types/order";
 
@@ -38,7 +43,7 @@ export default function AdminOrdersPage() {
       setLoading(true);
       setError("");
 
-      const accessToken = localStorage.getItem("accessToken");
+      const accessToken = sessionStorage.getItem("accessToken");
 
       if (!accessToken) {
         throw new Error("Không tìm thấy phiên đăng nhập.");
@@ -80,7 +85,7 @@ export default function AdminOrdersPage() {
       setError("");
       setUpdatingOrderId(order.id);
 
-      const accessToken = localStorage.getItem("accessToken");
+      const accessToken = sessionStorage.getItem("accessToken");
 
       if (!accessToken) {
         throw new Error("Không tìm thấy phiên đăng nhập.");
@@ -114,6 +119,36 @@ export default function AdminOrdersPage() {
           ? error.message
           : "Không thể cập nhật trạng thái đơn hàng",
       );
+    } finally {
+      setUpdatingOrderId(null);
+    }
+  }
+
+  async function handleCancelOrder(
+    order: Order,
+    input: CancelManagedOrderInput,
+  ) {
+    try {
+      setError("");
+      setUpdatingOrderId(order.id);
+      const accessToken = sessionStorage.getItem("accessToken");
+      if (!accessToken) throw new Error("Không tìm thấy phiên đăng nhập.");
+      const updated = await cancelManagedOrder(accessToken, order.id, input);
+      setOrders((current) =>
+        current.map((item) =>
+          item.id === order.id ? { ...item, ...updated } : item,
+        ),
+      );
+      setSelectedOrder((current) =>
+        current?.id === order.id ? { ...current, ...updated } : current,
+      );
+    } catch (cancelError) {
+      const error =
+        cancelError instanceof Error
+          ? cancelError
+          : new Error("Không thể hủy đơn hàng");
+      setError(error.message);
+      throw error;
     } finally {
       setUpdatingOrderId(null);
     }
@@ -459,6 +494,7 @@ export default function AdminOrdersPage() {
         updating={updatingOrderId !== null}
         onClose={() => setSelectedOrder(null)}
         onUpdateStatus={handleUpdateStatus}
+        onCancelOrder={handleCancelOrder}
       />
     </div>
   );

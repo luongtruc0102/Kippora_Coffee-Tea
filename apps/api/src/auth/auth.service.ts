@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   InternalServerErrorException,
@@ -11,6 +12,7 @@ import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 @Injectable()
 export class AuthService {
@@ -22,58 +24,40 @@ export class AuthService {
 
   //Đăng ký
   async register(registerDto: RegisterDto) {
-    const {
-      email,
-      password,
-      fullName,
-    } = registerDto;
+    const { email, password, fullName } = registerDto;
 
     // Kiểm tra email đã tồn tại hay chưa
-    const existingUser =
-      await this.usersService.findByEmail(
-        email,
-      );
+    const existingUser = await this.usersService.findByEmail(email);
 
     if (existingUser) {
-      throw new ConflictException(
-        'Email đã được sử dụng',
-      );
+      throw new ConflictException('Email đã được sử dụng');
     }
 
     // Tài khoản đầu tiên của hệ thống là ADMIN.
     // Những tài khoản tự đăng ký sau đó đều là USER.
-    const userCount =
-      await this.prisma.user.count();
+    const userCount = await this.prisma.user.count();
 
-    const roleName =
-      userCount === 0
-        ? 'ADMIN'
-        : 'USER';
+    const roleName = userCount === 0 ? 'ADMIN' : 'USER';
 
-    const userRole =
-      await this.prisma.role.findUnique({
-        where: {
-          name: roleName,
-        },
-      });
+    const userRole = await this.prisma.role.findUnique({
+      where: {
+        name: roleName,
+      },
+    });
 
     if (!userRole) {
-      throw new InternalServerErrorException(
-        `Không tìm thấy Role ${roleName}`,
-      );
+      throw new InternalServerErrorException(`Không tìm thấy Role ${roleName}`);
     }
 
     // Hash mật khẩu trước khi lưu vào database
-    const hashedPassword =
-      await argon2.hash(password);
+    const hashedPassword = await argon2.hash(password);
 
-    const user =
-      await this.usersService.create(
-        email,
-        hashedPassword,
-        fullName,
-        userRole.id,
-      );
+    const user = await this.usersService.create(
+      email,
+      hashedPassword,
+      fullName,
+      userRole.id,
+    );
 
     // Không trả password về client
     return {
@@ -129,6 +113,13 @@ export class AuthService {
         phone: user.phone,
         avatarUrl: user.avatarUrl,
         role: user.role.name,
+        branch: user.branch
+          ? {
+              id: user.branch.id,
+              code: user.branch.code,
+              name: user.branch.name,
+            }
+          : null,
       },
     };
   }
@@ -156,110 +147,131 @@ export class AuthService {
 
   // Cập nhật hồ sơ của user hiện tại.
   // Email và role không nhận từ client để tránh thay đổi trái phép.
-  async updateProfile(
-    userId: number,
-    dto: UpdateProfileDto,
-  ) {
-    const user =
-      await this.prisma.user.findUnique({
-        where: {
-          id: userId,
-        },
+  async updateProfile(userId: number, dto: UpdateProfileDto) {
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: userId,
+      },
 
-        select: {
-          id: true,
-        },
-      });
+      select: {
+        id: true,
+      },
+    });
 
     if (!user) {
-      throw new UnauthorizedException(
-        'Tài khoản không tồn tại',
-      );
+      throw new UnauthorizedException('Tài khoản không tồn tại');
     }
 
-    const normalizedPhone =
-      dto.phone?.trim();
+    const normalizedPhone = dto.phone?.trim();
 
     // Phone có unique constraint nên kiểm tra trước để trả thông báo dễ hiểu.
     if (normalizedPhone) {
-      const existingPhone =
-        await this.prisma.user.findFirst({
-          where: {
-            phone:
-              normalizedPhone,
-
-            id: {
-              not: userId,
-            },
-          },
-
-          select: {
-            id: true,
-          },
-        });
-
-      if (existingPhone) {
-        throw new ConflictException(
-          'Số điện thoại đã được sử dụng',
-        );
-      }
-    }
-
-    const updated =
-      await this.prisma.user.update({
+      const existingPhone = await this.prisma.userProfile.findFirst({
         where: {
-          id: userId,
-        },
+          phone: normalizedPhone,
 
-        data: {
-          ...(dto.fullName !==
-          undefined
-            ? {
-                fullName:
-                  dto.fullName.trim(),
-              }
-            : {}),
-
-          ...(dto.phone !== undefined
-            ? {
-                phone:
-                  normalizedPhone,
-              }
-            : {}),
-
-          ...(dto.avatarUrl !==
-          undefined
-            ? {
-                avatarUrl:
-                  dto.avatarUrl.trim(),
-              }
-            : {}),
-        },
-
-        include: {
-          role: {
-            select: {
-              name: true,
-            },
+          userId: {
+            not: userId,
           },
+        },
+
+        select: {
+          userId: true,
         },
       });
 
-    // Chỉ trả dữ liệu an toàn, không bao giờ trả password.
+      if (existingPhone) {
+        throw new ConflictException('Số điện thoại đã được sử dụng');
+      }
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.userProfile.upsert({
+        where: { userId },
+        create: {
+          userId,
+          ...(dto.fullName !== undefined
+            ? { fullName: dto.fullName.trim() }
+            : {}),
+          ...(dto.phone !== undefined ? { phone: normalizedPhone } : {}),
+          ...(dto.avatarUrl !== undefined
+            ? { avatarUrl: dto.avatarUrl.trim() }
+            : {}),
+        },
+        update: {
+          ...(dto.fullName !== undefined
+            ? { fullName: dto.fullName.trim() }
+            : {}),
+          ...(dto.phone !== undefined ? { phone: normalizedPhone } : {}),
+          ...(dto.avatarUrl !== undefined
+            ? { avatarUrl: dto.avatarUrl.trim() }
+            : {}),
+        },
+      }),
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { updatedAt: new Date() },
+      }),
+    ]);
+
+    // Giữ nguyên cấu trúc response cũ để frontend không phải đổi theo database.
+    return this.getProfile(userId);
+  }
+
+  /**
+   * Đổi mật khẩu cho tài khoản hiện tại.
+   * Luôn kiểm tra mật khẩu cũ và chỉ lưu mật khẩu mới sau khi đã hash.
+   */
+  async changePassword(userId: number, dto: ChangePasswordDto) {
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: userId,
+      },
+
+      select: {
+        id: true,
+        password: true,
+        isActive: true,
+      },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Tài khoản không tồn tại');
+    }
+
+    if (!user.isActive) {
+      throw new UnauthorizedException('Tài khoản đã bị khóa');
+    }
+
+    const currentPasswordValid = await argon2.verify(
+      user.password,
+      dto.currentPassword,
+    );
+
+    if (!currentPasswordValid) {
+      throw new UnauthorizedException('Mật khẩu hiện tại không chính xác');
+    }
+
+    const isSamePassword = await argon2.verify(user.password, dto.newPassword);
+
+    if (isSamePassword) {
+      throw new BadRequestException('Mật khẩu mới phải khác mật khẩu hiện tại');
+    }
+
+    const hashedPassword = await argon2.hash(dto.newPassword);
+
+    await this.prisma.user.update({
+      where: {
+        id: userId,
+      },
+
+      data: {
+        password: hashedPassword,
+      },
+    });
+
     return {
-      id: updated.id,
-      email: updated.email,
-      fullName:
-        updated.fullName,
-      phone: updated.phone,
-      avatarUrl:
-        updated.avatarUrl,
-      address: updated.address,
-      loyaltyPoints:
-        updated.loyaltyPoints,
-      role: updated.role.name,
-      createdAt:
-        updated.createdAt,
+      message: 'Đổi mật khẩu thành công',
     };
   }
 }

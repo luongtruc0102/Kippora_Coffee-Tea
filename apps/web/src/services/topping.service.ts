@@ -67,6 +67,7 @@ export async function createTopping(
   input: {
     name: string;
     price: number;
+    imageUrl?: string | null;
   },
 ): Promise<Topping> {
   const response = await fetch(
@@ -99,6 +100,7 @@ export async function updateTopping(
   input: {
     name?: string;
     price?: number;
+    imageUrl?: string | null;
   },
 ): Promise<Topping> {
   const response = await fetch(

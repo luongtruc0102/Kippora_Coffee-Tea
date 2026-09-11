@@ -239,7 +239,7 @@ export default function ProfileFormModal({
       setSubmitting(true);
 
       const accessToken =
-        localStorage.getItem(
+        sessionStorage.getItem(
           "accessToken",
         );
 

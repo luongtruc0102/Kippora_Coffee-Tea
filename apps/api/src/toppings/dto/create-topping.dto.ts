@@ -1,5 +1,11 @@
 // src/toppings/dto/create-topping.dto.ts
-import { IsNumber, IsString, Min, MinLength } from 'class-validator';
+import {
+  IsNumber,
+  IsOptional,
+  IsString,
+  Min,
+  MinLength,
+} from 'class-validator';
 
 // Kiểm tra dữ liệu client gửi lên khi tạo topping mới
 export class CreateToppingDto {
@@ -11,4 +17,8 @@ export class CreateToppingDto {
   @IsNumber()
   @Min(0)
   price!: number;
+
+  @IsOptional()
+  @IsString()
+  imageUrl?: string;
 }

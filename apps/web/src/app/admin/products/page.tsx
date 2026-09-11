@@ -59,7 +59,7 @@ export default function AdminProductsPage() {
     try {
       setError("");
 
-      const accessToken = localStorage.getItem("accessToken");
+      const accessToken = sessionStorage.getItem("accessToken");
 
       if (!accessToken) {
         throw new Error("Không tìm thấy phiên đăng nhập.");
@@ -111,7 +111,7 @@ export default function AdminProductsPage() {
         setSearching(true);
         setSearchError("");
 
-        const accessToken = localStorage.getItem("accessToken");
+        const accessToken = sessionStorage.getItem("accessToken");
 
         if (!accessToken) {
           throw new Error("Không tìm thấy phiên đăng nhập.");
@@ -185,7 +185,7 @@ export default function AdminProductsPage() {
 
   async function handleToggleStatus(product: Product) {
     try {
-      const accessToken = localStorage.getItem("accessToken");
+      const accessToken = sessionStorage.getItem("accessToken");
 
       if (!accessToken) {
         return;

@@ -67,7 +67,7 @@ export default function NotificationBell() {
         return;
       }
 
-      const accessToken = localStorage.getItem("accessToken");
+      const accessToken = sessionStorage.getItem("accessToken");
       if (!accessToken) {
         return;
       }
@@ -126,7 +126,7 @@ export default function NotificationBell() {
   }, []);
 
   async function openNotification(notification: UserNotification) {
-    const accessToken = localStorage.getItem("accessToken");
+    const accessToken = sessionStorage.getItem("accessToken");
     if (accessToken && !notification.isRead) {
       try {
         await markNotificationRead(accessToken, notification.id);
@@ -140,11 +140,91 @@ export default function NotificationBell() {
     }
     dismissToast(notification.id);
     setOpen(false);
-    if (notification.orderId) router.push(`/orders/${notification.orderId}`);
+    if (["PAYROLL_FINALIZED", "PAYROLL_PAID"].includes(notification.type)) {
+      const storedUser = sessionStorage.getItem("user");
+      let role = "STAFF";
+      try {
+        role = storedUser ? JSON.parse(storedUser).role : "STAFF";
+      } catch {}
+      router.push(
+        role === "BRANCH_MANAGER"
+          ? "/staff/payroll"
+          : role === "ADMIN"
+            ? "/admin/payroll"
+            : "/work-schedule#payroll",
+      );
+    } else if (notification.type === "LEAVE_REQUEST_UPDATED") {
+      router.push("/work-schedule");
+    } else if (
+      [
+        "INVENTORY_COUNT_SUBMITTED",
+        "INVENTORY_COUNT_APPROVED",
+        "INVENTORY_COUNT_REJECTED",
+      ].includes(notification.type)
+    ) {
+      const storedUser = sessionStorage.getItem("user");
+      let role = "STAFF";
+      try {
+        role = storedUser ? JSON.parse(storedUser).role : "STAFF";
+      } catch {}
+      router.push(
+        role === "ADMIN"
+          ? "/admin/inventory-counts"
+          : "/staff/inventory-counts",
+      );
+    } else if (notification.type.startsWith("PURCHASE_ORDER_")) {
+      const storedUser = sessionStorage.getItem("user");
+      let role = "STAFF";
+      try {
+        role = storedUser ? JSON.parse(storedUser).role : "STAFF";
+      } catch {}
+      router.push(
+        role === "ADMIN" ? "/admin/purchase-orders" : "/staff/purchase-orders",
+      );
+    } else if (notification.type.startsWith("INVENTORY_LOT_")) {
+      const storedUser = sessionStorage.getItem("user");
+      let role = "BRANCH_MANAGER";
+      try {
+        role = storedUser ? JSON.parse(storedUser).role : "BRANCH_MANAGER";
+      } catch {}
+      router.push(role === "ADMIN" ? "/admin/inventory-lots" : "/staff/inventory-lots");
+    } else if (
+      [
+        "ATTENDANCE_PERIOD_APPROVED",
+        "ATTENDANCE_PERIOD_RETURNED",
+        "ATTENDANCE_PERIOD_REOPENED",
+      ].includes(notification.type)
+    ) {
+      router.push("/staff/schedules");
+    } else if (
+      [
+        "LEAVE_REQUEST_CREATED",
+        "LEAVE_REQUEST_SUPPLEMENTED",
+        "LEAVE_REQUEST_CANCELLED",
+      ].includes(notification.type)
+    ) {
+      router.push("/staff/employees");
+    } else if (notification.orderId) {
+      const storedUser = sessionStorage.getItem("user");
+      let role = "USER";
+      try {
+        role = storedUser ? JSON.parse(storedUser).role : "USER";
+      } catch {}
+      if (role === "ADMIN") router.push("/admin/orders");
+      else if (role === "BRANCH_MANAGER") router.push("/staff/orders");
+      else router.push(`/orders/${notification.orderId}`);
+    } else if (notification.type === "LOW_STOCK") {
+      const storedUser = sessionStorage.getItem("user");
+      try {
+        if (storedUser && JSON.parse(storedUser).role === "ADMIN") {
+          router.push("/admin/inventory");
+        }
+      } catch {}
+    }
   }
 
   async function markAllRead() {
-    const accessToken = localStorage.getItem("accessToken");
+    const accessToken = sessionStorage.getItem("accessToken");
     if (!accessToken || unreadCount === 0) return;
     try {
       await markAllNotificationsRead(accessToken);
@@ -162,7 +242,11 @@ export default function NotificationBell() {
           aria-label={`Thông báo${unreadCount ? `, ${unreadCount} chưa đọc` : ""}`}
           aria-expanded={open}
           onClick={() => setOpen((value) => !value)}
-          className="relative flex h-10 w-10 items-center justify-center rounded-xl text-[#4A2C20] transition hover:bg-[#F3E9DE]"
+          className={`relative flex h-10 w-10 items-center justify-center rounded-xl transition ${
+            open
+              ? "bg-[#F3E9DE] text-[#C9894B]"
+              : "text-[#4A2C20] hover:bg-[#F3E9DE]"
+          }`}
         >
           <Bell size={20} />
           {unreadCount > 0 && (

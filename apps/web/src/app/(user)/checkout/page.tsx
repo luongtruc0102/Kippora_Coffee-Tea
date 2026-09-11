@@ -56,6 +56,12 @@ import type { CheckoutVoucher } from "@/types/voucher";
 import type { FulfillmentMethod, PaymentMethod } from "@/types/order";
 
 import { consumeReorderCheckoutMessage } from "@/utils/cart.util";
+import {
+  getStoreStatus,
+} from "@/services/store-settings.service";
+import type {
+  StoreStatus,
+} from "@/types/store-settings";
 
 const DeliveryRouteMap = dynamic(
   () => import("@/components/user/delivery-route-map"),
@@ -107,6 +113,14 @@ export default function CheckoutPage() {
 
   const [fulfillmentMethod, setFulfillmentMethod] =
     useState<FulfillmentMethod>("DELIVERY");
+
+  const [
+    storeStatus,
+    setStoreStatus,
+  ] =
+    useState<StoreStatus | null>(
+      null,
+    );
 
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
   const [customerCoordinates, setCustomerCoordinates] = useState<{
@@ -166,7 +180,7 @@ export default function CheckoutPage() {
         setLoading(true);
         setError("");
 
-        const accessToken = localStorage.getItem("accessToken");
+        const accessToken = sessionStorage.getItem("accessToken");
 
         if (!accessToken) {
           router.replace("/login?redirect=/checkout");
@@ -236,6 +250,7 @@ export default function CheckoutPage() {
             availableVouchers,
             userData,
             addressData,
+            storeStatusData,
           ] = await Promise.all([
             getCheckoutVouchers(
               accessToken,
@@ -247,6 +262,8 @@ export default function CheckoutPage() {
             getMyAddresses(
               accessToken,
             ),
+
+            getStoreStatus(),
           ]);
 
         setCart(cartData);
@@ -254,6 +271,21 @@ export default function CheckoutPage() {
         setSelectedItemIds(validIds);
 
         setVouchers(availableVouchers);
+
+        setStoreStatus(
+          storeStatusData,
+        );
+
+        if (
+          !storeStatusData
+            .deliveryAvailable &&
+          storeStatusData
+            .pickupAvailable
+        ) {
+          setFulfillmentMethod(
+            "PICKUP",
+          );
+        }
 
         setSavedAddresses(
           addressData,
@@ -390,6 +422,32 @@ export default function CheckoutPage() {
 
   const deliveryFee = Math.max(0, deliveryBaseFee - deliveryDiscount);
 
+  const deliveryDistanceExceeded =
+    fulfillmentMethod ===
+      "DELIVERY" &&
+    distanceKm !== null &&
+    storeStatus !== null &&
+    distanceKm >
+      storeStatus
+        .maxDeliveryDistanceKm;
+
+  const selectedMethodAvailable =
+    fulfillmentMethod ===
+    "DELIVERY"
+      ? Boolean(
+          storeStatus
+            ?.deliveryAvailable,
+        )
+      : Boolean(
+          storeStatus
+            ?.pickupAvailable,
+        );
+
+  const storeCheckoutDisabled =
+    !storeStatus?.isOpen ||
+    !selectedMethodAvailable ||
+    deliveryDistanceExceeded;
+
   // Lấy vị trí cửa hàng từ môi trường để dùng chung cho bản đồ và pickup.
   const configuredStoreCoordinates = {
     latitude: Number(process.env.NEXT_PUBLIC_STORE_LATITUDE),
@@ -451,6 +509,22 @@ export default function CheckoutPage() {
 
   // Đổi giao hàng/pickup và xóa kết quả tuyến đường không còn phù hợp.
   function selectFulfillmentMethod(method: FulfillmentMethod) {
+    const methodAvailable =
+      method === "DELIVERY"
+        ? storeStatus
+            ?.deliveryAvailable
+        : storeStatus
+            ?.pickupAvailable;
+
+    if (!methodAvailable) {
+      setError(
+        storeStatus
+          ?.unavailableReason ||
+          "Phương thức nhận hàng này hiện không khả dụng",
+      );
+      return;
+    }
+
     deliveryRequestId.current += 1;
     setFulfillmentMethod(method);
     setError("");
@@ -472,7 +546,7 @@ export default function CheckoutPage() {
 
     const requestId = ++addressSuggestionRequestId.current;
     const timeoutId = window.setTimeout(async () => {
-      const accessToken = localStorage.getItem("accessToken");
+      const accessToken = sessionStorage.getItem("accessToken");
 
       if (!accessToken) {
         router.replace("/login?redirect=/checkout");
@@ -525,7 +599,7 @@ export default function CheckoutPage() {
     const requestId = ++deliveryRequestId.current;
     const timeoutId = window.setTimeout(
       async () => {
-        const accessToken = localStorage.getItem("accessToken");
+        const accessToken = sessionStorage.getItem("accessToken");
 
         if (!accessToken) {
           router.replace("/login?redirect=/checkout");
@@ -705,7 +779,7 @@ export default function CheckoutPage() {
     coordinate: { latitude: number; longitude: number },
     selectedAddress?: string,
   ) {
-    const accessToken = localStorage.getItem("accessToken");
+    const accessToken = sessionStorage.getItem("accessToken");
 
     if (!accessToken) {
       router.replace("/login?redirect=/checkout");
@@ -786,7 +860,28 @@ export default function CheckoutPage() {
       setError("");
       setSubmitting(true);
 
-      const accessToken = localStorage.getItem("accessToken");
+      if (!storeStatus?.isOpen) {
+        throw new Error(
+          storeStatus?.unavailableReason ||
+            "Cửa hàng hiện chưa nhận đơn đặt hàng",
+        );
+      }
+
+      if (!selectedMethodAvailable) {
+        throw new Error(
+          "Phương thức nhận hàng đã chọn hiện không khả dụng",
+        );
+      }
+
+      if (deliveryDistanceExceeded) {
+        throw new Error(
+          "Địa chỉ nằm ngoài bán kính giao hàng tối đa " +
+            storeStatus.maxDeliveryDistanceKm +
+            " km",
+        );
+      }
+
+      const accessToken = sessionStorage.getItem("accessToken");
 
       if (!accessToken) {
         router.replace("/login?redirect=/checkout");
@@ -885,6 +980,36 @@ export default function CheckoutPage() {
       <ToastMessage message={reorderMessage} variant="info" />
       <ToastMessage message={error} />
       <ToastMessage message={deliveryError} />
+
+      {storeStatus && (
+        <div
+          className={
+            storeStatus.isOpen
+              ? "mt-5 flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800"
+              : "mt-5 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-800"
+          }
+        >
+          <Store
+            size={19}
+            className="mt-0.5 shrink-0"
+          />
+          <div>
+            <p className="text-sm font-bold">
+              Trạng thái nhận đơn
+            </p>
+            <p className="mt-1 text-sm leading-6">
+              {storeStatus.isOpen
+                ? "Cửa hàng đang mở · Dự kiến chuẩn bị " +
+                  storeStatus.preparationMinutes +
+                  " phút · Phục vụ " +
+                  storeStatus.openingTime +
+                  "–" +
+                  storeStatus.closingTime
+                : storeStatus.unavailableReason}
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="mt-8 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_440px]">
         <div className="space-y-5">
@@ -1137,13 +1262,14 @@ export default function CheckoutPage() {
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <button
                 type="button"
+                disabled={!storeStatus?.deliveryAvailable}
                 onClick={() => selectFulfillmentMethod("DELIVERY")}
                 aria-pressed={fulfillmentMethod === "DELIVERY"}
                 className={`rounded-2xl border p-4 text-left transition ${
                   fulfillmentMethod === "DELIVERY"
                     ? "border-[#C9894B] bg-[#FFF8F0] shadow-sm"
                     : "border-[#E9E1D8] bg-white hover:border-[#D8C5B4]"
-                }`}
+                } disabled:cursor-not-allowed disabled:opacity-50`}
               >
                 <span className="flex items-center gap-2 font-bold text-[#2A211D]">
                   <Truck size={19} className="text-[#C9894B]" />
@@ -1153,13 +1279,14 @@ export default function CheckoutPage() {
 
               <button
                 type="button"
+                disabled={!storeStatus?.pickupAvailable}
                 onClick={() => selectFulfillmentMethod("PICKUP")}
                 aria-pressed={fulfillmentMethod === "PICKUP"}
                 className={`rounded-2xl border p-4 text-left transition ${
                   fulfillmentMethod === "PICKUP"
                     ? "border-[#C9894B] bg-[#FFF8F0] shadow-sm"
                     : "border-[#E9E1D8] bg-white hover:border-[#D8C5B4]"
-                }`}
+                } disabled:cursor-not-allowed disabled:opacity-50`}
               >
                 <span className="flex items-center gap-2 font-bold text-[#2A211D]">
                   <Store size={19} className="text-[#C9894B]" />
@@ -1167,6 +1294,21 @@ export default function CheckoutPage() {
                 </span>
               </button>
             </div>
+
+            {deliveryDistanceExceeded && (
+              <p className="mt-3 rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+                Ngoài bán kính giao hàng tối đa{" "}
+                {storeStatus?.maxDeliveryDistanceKm} km.
+              </p>
+            )}
+
+            {storeStatus &&
+              !selectedMethodAvailable &&
+              storeStatus.isOpen && (
+                <p className="mt-3 rounded-xl bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">
+                  Phương thức này đang tạm ngưng. Vui lòng chọn phương thức còn khả dụng.
+                </p>
+              )}
 
             {fulfillmentMethod === "PICKUP" && (
               <div className="mt-4 rounded-2xl bg-[#FAF8F5] p-4">
@@ -1341,11 +1483,11 @@ export default function CheckoutPage() {
               </span>
             </div>
 
-            {loyaltyPoints < 5000 ? (
+            {loyaltyPoints < 1000 ? (
               <p className="mt-4 rounded-xl bg-[#FAF8F5] px-4 py-3 text-sm leading-6 text-[#8A817B]">
                 Cần thêm{" "}
                 <strong className="text-[#C9894B]">
-                  {(5000 - loyaltyPoints).toLocaleString("vi-VN")}
+                  {(1000 - loyaltyPoints).toLocaleString("vi-VN")}
                 </strong>{" "}
                 điểm để mở khóa đổi điểm.
               </p>
@@ -1514,6 +1656,21 @@ export default function CheckoutPage() {
               </span>
             </div>
 
+            {deliveryDistanceExceeded && (
+              <p className="mt-3 rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+                Ngoài bán kính giao hàng tối đa{" "}
+                {storeStatus?.maxDeliveryDistanceKm} km.
+              </p>
+            )}
+
+            {storeStatus &&
+              !selectedMethodAvailable &&
+              storeStatus.isOpen && (
+                <p className="mt-3 rounded-xl bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">
+                  Phương thức này đang tạm ngưng. Vui lòng chọn phương thức còn khả dụng.
+                </p>
+              )}
+
             {fulfillmentMethod === "PICKUP" && (
               <div className="flex justify-between">
                 <span className="text-[#78866B]">Phí nhận tại quán</span>
@@ -1584,13 +1741,18 @@ export default function CheckoutPage() {
           <button
             type="submit"
             disabled={
+              storeCheckoutDisabled ||
               submitting ||
               selectedItems.length === 0 ||
               (fulfillmentMethod === "DELIVERY" && distanceKm === null)
             }
             className="mt-5 w-full rounded-2xl bg-[#4A2C20] px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-[#382118] disabled:cursor-wait disabled:opacity-50"
           >
-            {submitting ? "Đang đặt hàng..." : "Đặt hàng"}
+            {submitting
+              ? "Đang đặt hàng..."
+              : storeCheckoutDisabled
+                ? "Cửa hàng chưa nhận đơn"
+                : "Đặt hàng"}
           </button>
           {fulfillmentMethod === "DELIVERY" ? (
             <div className="mt-3 rounded-xl bg-[#FAF4EC] px-4 py-3 text-xs leading-5 text-[#7A4B2B]">
@@ -1637,13 +1799,18 @@ export default function CheckoutPage() {
           <button
             type="submit"
             disabled={
+              storeCheckoutDisabled ||
               submitting ||
               selectedItems.length === 0 ||
               (fulfillmentMethod === "DELIVERY" && distanceKm === null)
             }
             className="rounded-xl bg-[#4A2C20] px-5 py-3 text-sm font-semibold text-white disabled:opacity-50"
           >
-            {submitting ? "Đang đặt..." : "Đặt hàng"}
+            {submitting
+              ? "Đang đặt..."
+              : storeCheckoutDisabled
+                ? "Chưa thể đặt hàng"
+                : "Đặt hàng"}
           </button>
         </div>
       </div>

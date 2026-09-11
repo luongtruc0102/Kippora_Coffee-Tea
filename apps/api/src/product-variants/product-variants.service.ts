@@ -12,10 +12,7 @@ export class ProductVariantsService {
   constructor(private readonly prisma: PrismaService) {}
 
   // Tạo variant mới cho sản phẩm
-  async create(
-    productId: number,
-    createDto: CreateProductVariantDto,
-  ) {
+  async create(productId: number, createDto: CreateProductVariantDto) {
     // Chỉ cho tạo variant nếu sản phẩm đang hoạt động
     const product = await this.prisma.product.findFirst({
       where: {
@@ -31,20 +28,17 @@ export class ProductVariantsService {
     }
 
     // Không cho một sản phẩm có nhiều variant cùng size
-    const existingVariant =
-      await this.prisma.productVariant.findUnique({
-        where: {
-          productId_size: {
-            productId,
-            size: createDto.size,
-          },
+    const existingVariant = await this.prisma.productVariant.findUnique({
+      where: {
+        productId_size: {
+          productId,
+          size: createDto.size,
         },
-      });
+      },
+    });
 
     if (existingVariant) {
-      throw new ConflictException(
-        'Size này đã tồn tại trong sản phẩm',
-      );
+      throw new ConflictException('Size này đã tồn tại trong sản phẩm');
     }
 
     return this.prisma.productVariant.create({
@@ -80,31 +74,28 @@ export class ProductVariantsService {
 
   // Lấy chi tiết một variant đang hoạt động
   async findOne(id: number) {
-    const variant =
-      await this.prisma.productVariant.findFirst({
-        where: {
-          id,
+    const variant = await this.prisma.productVariant.findFirst({
+      where: {
+        id,
+        isActive: true,
+        product: {
           isActive: true,
-          product: {
+          category: {
             isActive: true,
-            category: {
-              isActive: true,
-            },
           },
         },
-        include: {
-          product: {
-            include: {
-              category: true,
-            },
+      },
+      include: {
+        product: {
+          include: {
+            category: true,
           },
         },
-      });
+      },
+    });
 
     if (!variant) {
-      throw new NotFoundException(
-        'Không tìm thấy variant',
-      );
+      throw new NotFoundException('Không tìm thấy variant');
     }
 
     return variant;
@@ -112,46 +103,37 @@ export class ProductVariantsService {
 
   // Dùng nội bộ cho ADMIN để vẫn tìm được variant đã bị khóa
   private async findVariantById(id: number) {
-    const variant =
-      await this.prisma.productVariant.findUnique({
-        where: {
-          id,
-        },
-      });
+    const variant = await this.prisma.productVariant.findUnique({
+      where: {
+        id,
+      },
+    });
 
     if (!variant) {
-      throw new NotFoundException(
-        'Không tìm thấy variant',
-      );
+      throw new NotFoundException('Không tìm thấy variant');
     }
 
     return variant;
   }
 
   // Cập nhật thông tin variant
-  async update(
-    id: number,
-    updateDto: UpdateProductVariantDto,
-  ) {
+  async update(id: number, updateDto: UpdateProductVariantDto) {
     const variant = await this.findVariantById(id);
 
     if (updateDto.size !== undefined) {
       // Không cho đổi sang size đã tồn tại trong cùng sản phẩm
-      const existingVariant =
-        await this.prisma.productVariant.findFirst({
-          where: {
-            productId: variant.productId,
-            size: updateDto.size,
-            NOT: {
-              id,
-            },
+      const existingVariant = await this.prisma.productVariant.findFirst({
+        where: {
+          productId: variant.productId,
+          size: updateDto.size,
+          NOT: {
+            id,
           },
-        });
+        },
+      });
 
       if (existingVariant) {
-        throw new ConflictException(
-          'Size này đã tồn tại trong sản phẩm',
-        );
+        throw new ConflictException('Size này đã tồn tại trong sản phẩm');
       }
     }
 
@@ -164,10 +146,7 @@ export class ProductVariantsService {
   }
 
   // Soft lock hoặc mở lại variant
-  async updateStatus(
-    id: number,
-    isActive: boolean,
-  ) {
+  async updateStatus(id: number, isActive: boolean) {
     // ADMIN vẫn phải tìm được variant kể cả khi đang bị khóa
     await this.findVariantById(id);
 

@@ -19,6 +19,9 @@ import { Patch } from '@nestjs/common';
 import { Roles } from '../common/decorators/roles.decorator';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { SearchQueryDto } from '../common/dto/search-query.dto';
+import { CreatePosOrderDto } from './dto/create-pos-order.dto';
+import { PosCustomerLookupDto } from './dto/pos-customer-lookup.dto';
+import { CancelManagedOrderDto } from './dto/cancel-managed-order.dto';
 
 interface JwtUser {
   sub: number;
@@ -68,6 +71,26 @@ export class OrdersController {
     return this.ordersService.checkout(request.user.sub, checkoutDto);
   }
 
+  // Trưởng chi nhánh tạo hóa đơn tại quầy, không đi qua giỏ hàng của user.
+  @Roles('BRANCH_MANAGER')
+  @Post('pos')
+  createPosOrder(
+    @Req() request: AuthenticatedRequest,
+    @Body() createPosOrderDto: CreatePosOrderDto,
+  ) {
+    return this.ordersService.createPosOrder(
+      request.user.sub,
+      createPosOrderDto,
+    );
+  }
+
+  // Tra tên và điểm theo SĐT để lần mua sau nhân viên không phải nhập lại tên.
+  @Roles('BRANCH_MANAGER')
+  @Get('pos/customers/lookup')
+  lookupPosCustomer(@Query() query: PosCustomerLookupDto) {
+    return this.ordersService.lookupPosCustomer(query.phone);
+  }
+
   // Lấy lịch sử đơn hàng của user hiện tại
   @Get()
   findMyOrders(@Req() request: AuthenticatedRequest) {
@@ -97,11 +120,17 @@ export class OrdersController {
     return this.ordersService.reorderMyOrder(request.user.sub, id);
   }
 
-  // ADMIN và STAFF xem toàn bộ đơn hàng
-  @Roles('ADMIN', 'STAFF')
+  // Chỉ ADMIN và trưởng chi nhánh được xem danh sách đơn để vận hành.
+  @Roles('ADMIN', 'BRANCH_MANAGER')
   @Get('management/all')
-  findAll(@Query() query: SearchQueryDto) {
-    return this.ordersService.findAll(query.q);
+  findAll(
+    @Req() request: AuthenticatedRequest,
+    @Query() query: SearchQueryDto,
+  ) {
+    return this.ordersService.findAll(
+      query.q,
+      request.user.role === 'BRANCH_MANAGER' ? request.user.sub : undefined,
+    );
   }
 
   // Lấy chi tiết một đơn nhưng chỉ khi nó thuộc user hiện tại
@@ -113,20 +142,47 @@ export class OrdersController {
     return this.ordersService.findMyOrder(request.user.sub, id);
   }
 
-  // ADMIN và STAFF xem chi tiết bất kỳ đơn hàng nào
-  @Roles('ADMIN', 'STAFF')
+  // Chỉ ADMIN và trưởng chi nhánh xem chi tiết đơn quản lý.
+  @Roles('ADMIN', 'BRANCH_MANAGER')
   @Get('management/:id')
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.ordersService.findOne(id);
+  findOne(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.ordersService.findOne(
+      id,
+      request.user.role === 'BRANCH_MANAGER' ? request.user.sub : undefined,
+    );
   }
 
-  // ADMIN và STAFF cập nhật trạng thái đơn hàng
-  @Roles('ADMIN', 'STAFF')
+  // Chỉ ADMIN và trưởng chi nhánh được chuyển trạng thái đơn.
+  @Roles('ADMIN', 'BRANCH_MANAGER')
   @Patch('management/:id/status')
   updateStatus(
+    @Req() request: AuthenticatedRequest,
     @Param('id', ParseIntPipe) id: number,
     @Body() updateOrderStatusDto: UpdateOrderStatusDto,
   ) {
-    return this.ordersService.updateStatus(id, updateOrderStatusDto.status);
+    return this.ordersService.updateStatus(
+      id,
+      updateOrderStatusDto.status,
+      request.user.role === 'BRANCH_MANAGER' ? request.user.sub : undefined,
+    );
+  }
+
+  // Hủy đơn quản lý; đơn đã thu tiền sẽ hoàn toàn bộ trong cùng giao dịch.
+  @Roles('ADMIN', 'BRANCH_MANAGER')
+  @Patch('management/:id/cancel')
+  cancelManagedOrder(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CancelManagedOrderDto,
+  ) {
+    return this.ordersService.cancelManagedOrder(
+      request.user.sub,
+      request.user.role,
+      id,
+      dto,
+    );
   }
 }

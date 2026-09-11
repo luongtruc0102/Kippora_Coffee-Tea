@@ -78,7 +78,7 @@ export default function ProductDetailModal({
         setLoading(true);
         setError("");
 
-        const accessToken = localStorage.getItem("accessToken");
+        const accessToken = sessionStorage.getItem("accessToken");
 
         if (!accessToken) {
           throw new Error("Không tìm thấy phiên đăng nhập.");
@@ -138,7 +138,7 @@ export default function ProductDetailModal({
       setSaving(true);
       setError("");
 
-      const accessToken = localStorage.getItem("accessToken");
+      const accessToken = sessionStorage.getItem("accessToken");
 
       if (!accessToken) {
         throw new Error("Không tìm thấy phiên đăng nhập.");
@@ -188,7 +188,7 @@ export default function ProductDetailModal({
 
   async function handleToggleStatus(variant: ProductVariant) {
     try {
-      const accessToken = localStorage.getItem("accessToken");
+      const accessToken = sessionStorage.getItem("accessToken");
 
       if (!accessToken) {
         return;
@@ -226,7 +226,7 @@ export default function ProductDetailModal({
 
       setUpdatingToppingId(topping.id);
 
-      const accessToken = localStorage.getItem("accessToken");
+      const accessToken = sessionStorage.getItem("accessToken");
 
       if (!accessToken) {
         throw new Error("Không tìm thấy phiên đăng nhập.");

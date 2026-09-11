@@ -193,3 +193,54 @@ export async function updateProfile(
 
   return data;
 }
+
+export type ChangePasswordInput = {
+  currentPassword: string;
+  newPassword: string;
+};
+
+export type ChangePasswordResponse = {
+  message: string;
+};
+
+/**
+ * Đổi mật khẩu của tài khoản đang đăng nhập.
+ * Access Token xác định user nên frontend không gửi userId.
+ */
+export async function changePassword(
+  accessToken: string,
+  input: ChangePasswordInput,
+): Promise<ChangePasswordResponse> {
+  const response = await fetch(
+    `${getApiUrl()}/auth/change-password`,
+    {
+      method: 'PATCH',
+
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+
+      body: JSON.stringify(input),
+    },
+  );
+
+  const data = await response
+    .json()
+    .catch(() => null);
+
+  if (!response.ok) {
+    const message = Array.isArray(
+      data?.message,
+    )
+      ? data.message.join(', ')
+      : data?.message;
+
+    throw new Error(
+      message ||
+        'Không thể đổi mật khẩu',
+    );
+  }
+
+  return data;
+}

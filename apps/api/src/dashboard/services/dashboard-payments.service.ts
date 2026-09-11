@@ -10,66 +10,65 @@ export class DashboardPaymentsService {
   // Thống kê thanh toán theo trạng thái và phương thức
   async getPaymentStatistics(
     period: DashboardPeriod = '7D',
+    branchId?: number,
+    from?: string,
+    to?: string,
   ) {
-    const { startDate, endDate } =
-      getDashboardPeriodRange(period);
+    const { startDate, endDate } = getDashboardPeriodRange(period, from, to);
 
-    const [statusStats, methodStats] =
-      await Promise.all([
-        this.prisma.payment.groupBy({
-          by: ['status'],
+    const [statusStats, methodStats] = await Promise.all([
+      this.prisma.payment.groupBy({
+        by: ['status'],
 
-          where: {
-            createdAt: {
-              gte: startDate,
-              lte: endDate,
-            },
+        where: {
+          ...(branchId ? { order: { branchId } } : {}),
+          createdAt: {
+            gte: startDate,
+            lte: endDate,
           },
+        },
 
-          _count: {
-            _all: true,
+        _count: {
+          _all: true,
+        },
+
+        _sum: {
+          amount: true,
+        },
+      }),
+
+      this.prisma.payment.groupBy({
+        by: ['method'],
+
+        where: {
+          ...(branchId ? { order: { branchId } } : {}),
+          createdAt: {
+            gte: startDate,
+            lte: endDate,
           },
+        },
 
-          _sum: {
-            amount: true,
-          },
-        }),
+        _count: {
+          _all: true,
+        },
 
-        this.prisma.payment.groupBy({
-          by: ['method'],
-
-          where: {
-            createdAt: {
-              gte: startDate,
-              lte: endDate,
-            },
-          },
-
-          _count: {
-            _all: true,
-          },
-
-          _sum: {
-            amount: true,
-          },
-        }),
-      ]);
+        _sum: {
+          amount: true,
+        },
+      }),
+    ]);
 
     return {
       byStatus: statusStats.map((item) => ({
         status: item.status,
         count: item._count._all,
-        amount: Number(
-          item._sum.amount ?? 0,
-        ),
+        amount: Number(item._sum.amount ?? 0),
       })),
 
       byMethod: methodStats.map((item) => ({
         method: item.method,
         count: item._count._all,
-        amount: Number(
-          item._sum.amount ?? 0,
-        ),
+        amount: Number(item._sum.amount ?? 0),
       })),
     };
   }

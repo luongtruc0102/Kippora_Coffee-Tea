@@ -6,14 +6,28 @@ import { BadRequestException } from '@nestjs/common';
 import { FuzzySearchService } from '../common/fuzzy-search/fuzzy-search.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { VouchersService } from '../vouchers/vouchers.service';
+import type { StoreSettingsService } from '../store-settings/store-settings.service';
+import type { InventoryService } from '../inventory/inventory.service';
 import { OrdersService } from './orders.service';
 
 describe('OrdersService COD order flow', () => {
-  function createService(prisma: Record<string, unknown>) {
+  function createService(
+    prisma: Record<string, unknown>,
+    inventory?: Pick<
+      InventoryService,
+      'releaseOrder' | 'consumeOrder' | 'reserveForOrder'
+    >,
+  ) {
     return new OrdersService(
       prisma as unknown as PrismaService,
       {} as VouchersService,
       new FuzzySearchService(),
+      {} as StoreSettingsService,
+      (inventory ?? {
+        releaseOrder: jest.fn(),
+        consumeOrder: jest.fn(),
+        reserveForOrder: jest.fn().mockResolvedValue('NOT_TRACKED'),
+      }) as unknown as InventoryService,
     );
   }
 
@@ -39,8 +53,8 @@ describe('OrdersService COD order flow', () => {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         findUnique: jest.fn().mockResolvedValue(cancelledOrder),
       },
-      user: {
-        update: jest.fn().mockResolvedValue({}),
+      customerProfile: {
+        upsert: jest.fn().mockResolvedValue({}),
       },
       voucher: {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -76,9 +90,10 @@ describe('OrdersService COD order flow', () => {
         cancelledAt: expect.any(Date),
       },
     });
-    expect(transaction.user.update).toHaveBeenCalledWith({
-      where: { id: 3 },
-      data: { loyaltyPoints: { increment: 3000 } },
+    expect(transaction.customerProfile.upsert).toHaveBeenCalledWith({
+      where: { userId: 3 },
+      create: { userId: 3, loyaltyPoints: 3000 },
+      update: { loyaltyPoints: { increment: 3000 } },
     });
     expect(transaction.voucher.updateMany).toHaveBeenCalledTimes(2);
     expect(transaction.payment.updateMany).toHaveBeenCalledWith({
@@ -262,8 +277,8 @@ describe('OrdersService COD order flow', () => {
           fulfillmentMethod: 'DELIVERY',
         }),
       },
-      user: {
-        update: jest.fn().mockResolvedValue({}),
+      customerProfile: {
+        upsert: jest.fn().mockResolvedValue({}),
       },
       payment: {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -302,5 +317,231 @@ describe('OrdersService COD order flow', () => {
         paidAt: expect.any(Date),
       },
     });
+  });
+
+  it('hủy đơn đã thanh toán, hoàn toàn bộ tiền và trả lượng nguyên liệu đang giữ', async () => {
+    const processedAt = new Date('2026-09-09T03:00:00.000Z');
+    const paidOrder = {
+      id: 12,
+      userId: 3,
+      branchId: 1,
+      status: 'CONFIRMED',
+      channel: 'POS',
+      inventoryState: 'RESERVED',
+      posCustomerId: 4,
+      loyaltyPointsUsed: 300,
+      loyaltyPointsEarned: 1200,
+      loyaltyPointsGrantedAt: processedAt,
+      voucherId: 7,
+      appliedVouchers: [{ voucherId: 7 }, { voucherId: 9 }],
+      payment: { id: 5, status: 'PAID', amount: 120000 },
+      refund: null,
+      user: { role: { name: 'USER' } },
+    };
+    const refund = {
+      id: 8,
+      code: 'HT-D12-P5',
+      orderId: 12,
+      paymentId: 5,
+      branchId: 1,
+      amount: 120000,
+      method: 'CASH',
+      reason: 'Khách yêu cầu hủy',
+      processedById: 1,
+      processedAt,
+      createdAt: processedAt,
+      processedBy: {
+        id: 1,
+        email: 'admin@kippora.vn',
+        profile: {
+          fullName: 'Admin',
+          phone: null,
+          avatarUrl: null,
+        },
+      },
+    };
+    const refundedOrder = {
+      ...paidOrder,
+      status: 'CANCELLED',
+      payment: { ...paidOrder.payment, status: 'REFUNDED' },
+      refund,
+      items: [],
+    };
+    const transaction = {
+      order: {
+        findUnique: jest.fn().mockResolvedValue(paidOrder),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findUniqueOrThrow: jest.fn().mockResolvedValue(refundedOrder),
+      },
+      payment: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      paymentRefund: {
+        create: jest.fn().mockResolvedValue(refund),
+      },
+      posCustomer: {
+        findUnique: jest.fn().mockResolvedValue({ loyaltyPoints: 5000 }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      customerProfile: {
+        findUnique: jest.fn(),
+        upsert: jest.fn(),
+      },
+      voucher: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      notification: {
+        create: jest.fn(),
+      },
+    };
+    const auditLog = { create: jest.fn().mockResolvedValue({}) };
+    const prisma = {
+      order: { findUnique: jest.fn().mockResolvedValue(paidOrder) },
+      auditLog,
+      $transaction: jest.fn((callback: (tx: typeof transaction) => unknown) =>
+        callback(transaction),
+      ),
+    };
+    const inventory = {
+      releaseOrder: jest.fn().mockResolvedValue(undefined),
+      consumeOrder: jest.fn(),
+      reserveForOrder: jest.fn().mockResolvedValue('NOT_TRACKED'),
+    };
+    const service = createService(prisma, inventory);
+
+    const result = await service.cancelManagedOrder(1, 'ADMIN', 12, {
+      reason: 'Khách yêu cầu hủy',
+      refundMethod: 'CASH',
+    });
+
+    expect(transaction.payment.updateMany).toHaveBeenCalledWith({
+      where: { id: 5, status: 'PAID' },
+      data: { status: 'REFUNDED' },
+    });
+    expect(transaction.paymentRefund.create).toHaveBeenCalledWith({
+      // Jest khai báo asymmetric matcher là any dù runtime kiểm tra đúng object.
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      data: expect.objectContaining({
+        code: 'HT-D12-P5',
+        orderId: 12,
+        paymentId: 5,
+        amount: 120000,
+        method: 'CASH',
+        reason: 'Khách yêu cầu hủy',
+        processedById: 1,
+      }),
+    });
+    expect(inventory.releaseOrder).toHaveBeenCalledWith(transaction, 12, 1, 1);
+    expect(transaction.posCustomer.update).toHaveBeenCalledWith({
+      where: { id: 4 },
+      data: { loyaltyPoints: 4100 },
+    });
+    expect(transaction.voucher.updateMany).toHaveBeenCalledTimes(2);
+    expect(auditLog.create).toHaveBeenCalledWith({
+      // Jest khai báo asymmetric matcher là any dù runtime kiểm tra đúng object.
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      data: expect.objectContaining({
+        module: 'PAYMENT',
+        action: 'REFUND_AND_CANCEL_ORDER',
+      }),
+    });
+    expect(result.refund).toEqual(
+      expect.objectContaining({
+        amount: 120000,
+        method: 'CASH',
+        // Jest khai báo asymmetric matcher là any dù runtime kiểm tra đúng object.
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        processedBy: expect.objectContaining({ fullName: 'Admin' }),
+      }),
+    );
+  });
+
+  it('không nhập trả kho khi đơn đã bắt đầu pha chế', async () => {
+    const paidOrder = {
+      id: 13,
+      userId: 3,
+      branchId: 1,
+      status: 'PREPARING',
+      channel: 'ONLINE',
+      inventoryState: 'CONSUMED',
+      posCustomerId: null,
+      loyaltyPointsUsed: 0,
+      loyaltyPointsEarned: 0,
+      loyaltyPointsGrantedAt: null,
+      voucherId: null,
+      appliedVouchers: [],
+      payment: { id: 6, status: 'PAID', amount: 80000 },
+      refund: null,
+      user: { role: { name: 'USER' } },
+    };
+    const refund = {
+      id: 9,
+      amount: 80000,
+      processedBy: { id: 1, email: 'admin@kippora.vn', profile: null },
+    };
+    const transaction = {
+      order: {
+        findUnique: jest.fn().mockResolvedValue(paidOrder),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          ...paidOrder,
+          status: 'CANCELLED',
+          payment: { ...paidOrder.payment, status: 'REFUNDED' },
+          refund,
+        }),
+      },
+      payment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      paymentRefund: { create: jest.fn().mockResolvedValue(refund) },
+      customerProfile: {
+        findUnique: jest.fn().mockResolvedValue({ loyaltyPoints: 100 }),
+        upsert: jest.fn().mockResolvedValue({}),
+      },
+      posCustomer: { findUnique: jest.fn(), update: jest.fn() },
+      voucher: { updateMany: jest.fn() },
+      notification: { create: jest.fn().mockResolvedValue({}) },
+    };
+    const prisma = {
+      order: { findUnique: jest.fn().mockResolvedValue(paidOrder) },
+      $transaction: jest.fn((callback: (tx: typeof transaction) => unknown) =>
+        callback(transaction),
+      ),
+    };
+    const inventory = {
+      releaseOrder: jest.fn(),
+      consumeOrder: jest.fn(),
+      reserveForOrder: jest.fn().mockResolvedValue('NOT_TRACKED'),
+    };
+    const service = createService(prisma, inventory);
+
+    await service.cancelManagedOrder(1, 'ADMIN', 13, {
+      reason: 'Hoàn tiền sau khi đã pha',
+      refundMethod: 'BANK_TRANSFER',
+    });
+
+    expect(inventory.releaseOrder).not.toHaveBeenCalled();
+    expect(transaction.notification.create).toHaveBeenCalled();
+  });
+
+  it('bắt buộc chọn phương thức hoàn cho đơn đã thanh toán', async () => {
+    const prisma = {
+      order: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 14,
+          branchId: 1,
+          status: 'CONFIRMED',
+          payment: { id: 7, status: 'PAID', amount: 50000 },
+          refund: null,
+        }),
+      },
+      $transaction: jest.fn(),
+    };
+    const service = createService(prisma);
+
+    await expect(
+      service.cancelManagedOrder(1, 'ADMIN', 14, {
+        reason: 'Khách yêu cầu hủy',
+      }),
+    ).rejects.toThrow('Vui lòng chọn phương thức hoàn tiền');
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });

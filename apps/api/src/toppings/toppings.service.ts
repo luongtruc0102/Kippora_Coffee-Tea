@@ -18,17 +18,14 @@ export class ToppingsService {
   // Tạo topping mới
   async create(createToppingDto: CreateToppingDto) {
     // Không cho phép trùng tên topping
-    const existingTopping =
-      await this.prisma.topping.findUnique({
-        where: {
-          name: createToppingDto.name,
-        },
-      });
+    const existingTopping = await this.prisma.topping.findUnique({
+      where: {
+        name: createToppingDto.name,
+      },
+    });
 
     if (existingTopping) {
-      throw new ConflictException(
-        'Tên topping đã tồn tại',
-      );
+      throw new ConflictException('Tên topping đã tồn tại');
     }
 
     return this.prisma.topping.create({
@@ -50,55 +47,46 @@ export class ToppingsService {
 
   // Lấy chi tiết topping và các sản phẩm đang sử dụng topping đó
   async findOne(id: number) {
-    const topping =
-      await this.prisma.topping.findUnique({
-        where: {
-          id,
-        },
-        include: {
-          products: {
-            include: {
-              product: true,
-            },
+    const topping = await this.prisma.topping.findUnique({
+      where: {
+        id,
+      },
+      include: {
+        products: {
+          include: {
+            product: true,
           },
         },
-      });
+      },
+    });
 
     if (!topping) {
-      throw new NotFoundException(
-        'Không tìm thấy topping',
-      );
+      throw new NotFoundException('Không tìm thấy topping');
     }
 
     return topping;
   }
 
   // Cập nhật thông tin topping
-  async update(
-    id: number,
-    updateToppingDto: UpdateToppingDto,
-  ) {
+  async update(id: number, updateToppingDto: UpdateToppingDto) {
     // Đảm bảo topping cần cập nhật tồn tại
     await this.findOne(id);
 
     if (updateToppingDto.name) {
       // Kiểm tra tên mới có bị trùng với topping khác
-      const existingTopping =
-        await this.prisma.topping.findFirst({
-          where: {
-            name: updateToppingDto.name,
+      const existingTopping = await this.prisma.topping.findFirst({
+        where: {
+          name: updateToppingDto.name,
 
-            // Bỏ qua chính topping đang được cập nhật
-            NOT: {
-              id,
-            },
+          // Bỏ qua chính topping đang được cập nhật
+          NOT: {
+            id,
           },
-        });
+        },
+      });
 
       if (existingTopping) {
-        throw new ConflictException(
-          'Tên topping đã tồn tại',
-        );
+        throw new ConflictException('Tên topping đã tồn tại');
       }
     }
 
@@ -111,10 +99,7 @@ export class ToppingsService {
   }
 
   // Soft lock topping, không xóa dữ liệu khỏi database
-  async updateStatus(
-    id: number,
-    isActive: boolean,
-  ) {
+  async updateStatus(id: number, isActive: boolean) {
     // Kiểm tra topping tồn tại trước khi đổi trạng thái
     await this.findOne(id);
 

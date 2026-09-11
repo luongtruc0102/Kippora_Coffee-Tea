@@ -55,7 +55,7 @@ export default function AdminCategoriesPage() {
         setLoading(true);
         setError("");
 
-        const accessToken = localStorage.getItem("accessToken");
+        const accessToken = sessionStorage.getItem("accessToken");
 
         if (!accessToken) {
           throw new Error("Không tìm thấy phiên đăng nhập.");
@@ -141,7 +141,7 @@ export default function AdminCategoriesPage() {
       setSaving(true);
       setError("");
 
-      const accessToken = localStorage.getItem("accessToken");
+      const accessToken = sessionStorage.getItem("accessToken");
 
       if (!accessToken) {
         throw new Error("Không tìm thấy phiên đăng nhập.");
@@ -181,7 +181,7 @@ export default function AdminCategoriesPage() {
       setError("");
       setUpdatingId(category.id);
 
-      const accessToken = localStorage.getItem("accessToken");
+      const accessToken = sessionStorage.getItem("accessToken");
 
       if (!accessToken) {
         throw new Error("Không tìm thấy phiên đăng nhập.");

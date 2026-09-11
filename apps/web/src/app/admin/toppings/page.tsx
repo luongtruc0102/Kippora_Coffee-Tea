@@ -10,6 +10,7 @@ import {
   UnlockKeyhole,
   X,
   ChevronDown,
+  ImagePlus,
 } from "lucide-react";
 
 import {
@@ -22,6 +23,7 @@ import {
 import type { Topping } from "@/types/product";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import ToastMessage from "@/components/ui/toast-message";
+import { uploadToppingImage } from "@/services/upload.service";
 
 export default function AdminToppingsPage() {
   const [toppings, setToppings] = useState<Topping[]>([]);
@@ -45,6 +47,11 @@ export default function AdminToppingsPage() {
 
   const [price, setPrice] = useState("");
 
+  const [imageUrl, setImageUrl] = useState("");
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+
   const [selectedStatus, setSelectedStatus] = useState("ALL");
 
   const loadToppings = useCallback(async (query = "", signal?: AbortSignal) => {
@@ -54,7 +61,7 @@ export default function AdminToppingsPage() {
       setLoading(true);
       setError("");
 
-      const accessToken = localStorage.getItem("accessToken");
+      const accessToken = sessionStorage.getItem("accessToken");
 
       if (!accessToken) {
         throw new Error("Không tìm thấy phiên đăng nhập.");
@@ -113,6 +120,9 @@ export default function AdminToppingsPage() {
     setEditingTopping(null);
     setName("");
     setPrice("");
+    setImageUrl("");
+    setPreviewUrl("");
+    setSelectedFile(null);
     setError("");
     setFormOpen(true);
   }
@@ -121,12 +131,15 @@ export default function AdminToppingsPage() {
     setEditingTopping(topping);
     setName(topping.name);
     setPrice(String(topping.price));
+    setImageUrl(topping.imageUrl ?? "");
+    setPreviewUrl(topping.imageUrl ?? "");
+    setSelectedFile(null);
     setError("");
     setFormOpen(true);
   }
 
-  function closeForm() {
-    if (saving) {
+  function closeForm(force = false) {
+    if (!force && (saving || uploading)) {
       return;
     }
 
@@ -134,6 +147,38 @@ export default function AdminToppingsPage() {
     setEditingTopping(null);
     setName("");
     setPrice("");
+    if (previewUrl.startsWith("blob:")) URL.revokeObjectURL(previewUrl);
+    setImageUrl("");
+    setPreviewUrl("");
+    setSelectedFile(null);
+  }
+
+  function handleImageChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      setError("Ảnh topping chỉ hỗ trợ JPG, PNG hoặc WEBP.");
+      return;
+    }
+
+    if (file.size > 3 * 1024 * 1024) {
+      setError("Ảnh topping không được vượt quá 3MB.");
+      return;
+    }
+
+    if (previewUrl.startsWith("blob:")) URL.revokeObjectURL(previewUrl);
+    setSelectedFile(file);
+    setPreviewUrl(URL.createObjectURL(file));
+    setError("");
+  }
+
+  function removeImage() {
+    if (previewUrl.startsWith("blob:")) URL.revokeObjectURL(previewUrl);
+    setSelectedFile(null);
+    setImageUrl("");
+    setPreviewUrl("");
   }
 
   async function handleSubmit(event: React.FormEvent) {
@@ -143,7 +188,7 @@ export default function AdminToppingsPage() {
       setSaving(true);
       setError("");
 
-      const accessToken = localStorage.getItem("accessToken");
+      const accessToken = sessionStorage.getItem("accessToken");
 
       if (!accessToken) {
         throw new Error("Không tìm thấy phiên đăng nhập.");
@@ -159,25 +204,36 @@ export default function AdminToppingsPage() {
         throw new Error("Giá topping không hợp lệ.");
       }
 
+      let finalImageUrl: string | null = imageUrl || null;
+
+      if (selectedFile) {
+        setUploading(true);
+        const uploadResult = await uploadToppingImage(accessToken, selectedFile);
+        finalImageUrl = uploadResult.imageUrl;
+      }
+
       if (editingTopping) {
         await updateTopping(accessToken, editingTopping.id, {
           name: name.trim(),
           price: numericPrice,
+          imageUrl: finalImageUrl,
         });
       } else {
         await createTopping(accessToken, {
           name: name.trim(),
           price: numericPrice,
+          imageUrl: finalImageUrl,
         });
       }
 
       await loadToppings(debouncedSearch);
-      closeForm();
+      closeForm(true);
     } catch (error) {
       setError(
         error instanceof Error ? error.message : "Không thể lưu topping",
       );
     } finally {
+      setUploading(false);
       setSaving(false);
     }
   }
@@ -187,7 +243,7 @@ export default function AdminToppingsPage() {
       setUpdatingId(topping.id);
       setError("");
 
-      const accessToken = localStorage.getItem("accessToken");
+      const accessToken = sessionStorage.getItem("accessToken");
 
       if (!accessToken) {
         throw new Error("Không tìm thấy phiên đăng nhập.");
@@ -322,9 +378,22 @@ export default function AdminToppingsPage() {
                       className="border-b border-[#F0E8E0] last:border-b-0 hover:bg-[#FCFAF7]"
                     >
                       <td className="px-6 py-4">
-                        <p className="font-semibold text-[#1F1B18]">
-                          {topping.name}
-                        </p>
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-[#E9E1D8] bg-[#F7F2EC] bg-cover bg-center text-[#C9894B]"
+                            style={
+                              topping.imageUrl
+                                ? { backgroundImage: `url("${topping.imageUrl}")` }
+                                : undefined
+                            }
+                          >
+                            {!topping.imageUrl && <ImagePlus size={19} />}
+                          </div>
+
+                          <p className="font-semibold text-[#1F1B18]">
+                            {topping.name}
+                          </p>
+                        </div>
                       </td>
 
                       <td className="px-6 py-4 font-semibold text-[#4A2C20]">
@@ -398,7 +467,7 @@ export default function AdminToppingsPage() {
 
       {formOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-xl rounded-2xl border border-[#E9E1D8] bg-white shadow-xl">
+          <div className="max-h-[calc(100dvh-2rem)] w-full max-w-xl overflow-y-auto rounded-2xl border border-[#E9E1D8] bg-white shadow-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <div className="flex items-center justify-between border-b border-[#E9E1D8] px-6 py-4">
               <div>
                 <h3 className="text-xl font-semibold text-[#1F1B18]">
@@ -407,15 +476,15 @@ export default function AdminToppingsPage() {
 
                 <p className="mt-1 text-sm text-[#78866B]">
                   {editingTopping
-                    ? "Cập nhật tên và giá topping."
+                    ? "Cập nhật hình ảnh, tên và giá topping."
                     : "Tạo topping mới cho menu."}
                 </p>
               </div>
 
               <button
                 type="button"
-                onClick={closeForm}
-                disabled={saving}
+                onClick={() => closeForm()}
+                disabled={saving || uploading}
                 className="flex h-9 w-9 items-center justify-center rounded-lg text-[#78866B] hover:bg-[#FAF8F5]"
               >
                 <X size={19} />
@@ -451,11 +520,57 @@ export default function AdminToppingsPage() {
                 />
               </div>
 
+              <div>
+                <label className="mb-2 block text-sm font-medium text-[#1F1B18]">
+                  Hình ảnh topping
+                </label>
+
+                <div className="flex items-center gap-4 rounded-xl border border-[#E9E1D8] bg-[#FAF8F5] p-4">
+                  <div
+                    className="flex h-24 w-24 shrink-0 items-center justify-center rounded-xl border border-[#E3D8CE] bg-white bg-contain bg-center bg-no-repeat text-[#C9894B]"
+                    style={
+                      previewUrl
+                        ? { backgroundImage: `url("${previewUrl}")` }
+                        : undefined
+                    }
+                  >
+                    {!previewUrl && <ImagePlus size={26} />}
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-[#F3E9DE] px-4 py-2.5 text-sm font-semibold text-[#4A2C20] transition hover:bg-[#EADBCB]">
+                      <ImagePlus size={17} />
+                      {previewUrl ? "Đổi ảnh" : "Chọn ảnh"}
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        onChange={handleImageChange}
+                        className="hidden"
+                      />
+                    </label>
+
+                    {previewUrl && (
+                      <button
+                        type="button"
+                        onClick={removeImage}
+                        className="ml-2 rounded-xl px-3 py-2.5 text-sm font-medium text-red-600 transition hover:bg-red-50"
+                      >
+                        Xóa ảnh
+                      </button>
+                    )}
+
+                    <p className="mt-2 text-xs text-[#8A817B]">
+                      JPG, PNG hoặc WEBP · tối đa 3MB.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <div className="flex justify-end gap-3 border-t border-[#F0E8E0] pt-5">
                 <button
                   type="button"
-                  onClick={closeForm}
-                  disabled={saving}
+                  onClick={() => closeForm()}
+                  disabled={saving || uploading}
                   className="rounded-xl border border-[#E9E1D8] px-4 py-2.5 text-sm font-medium text-[#5E5650] hover:bg-[#FAF8F5]"
                 >
                   Hủy
@@ -463,11 +578,13 @@ export default function AdminToppingsPage() {
 
                 <button
                   type="submit"
-                  disabled={saving}
+                  disabled={saving || uploading}
                   className="rounded-xl bg-[#4A2C20] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#382118] disabled:cursor-wait disabled:opacity-60"
                 >
-                  {saving
-                    ? "Đang lưu..."
+                  {uploading
+                    ? "Đang tải ảnh..."
+                    : saving
+                      ? "Đang lưu..."
                     : editingTopping
                       ? "Lưu thay đổi"
                       : "Thêm topping"}

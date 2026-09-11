@@ -1,13 +1,18 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
 import { Eye, EyeOff, X } from "lucide-react";
 
 import { createStaff } from "@/services/user.service";
+import {
+  assignBranchManager,
+  getBranches,
+} from "@/services/store-settings.service";
 
 import type { AdminUser } from "@/types/user";
 import ToastMessage from "@/components/ui/toast-message";
+import type { BranchStatus } from "@/types/store-settings";
 
 type Props = {
   open: boolean;
@@ -33,6 +38,35 @@ export default function StaffFormModal({ open, onClose, onSaved }: Props) {
   const [saving, setSaving] = useState(false);
 
   const [error, setError] = useState("");
+  const [branches, setBranches] = useState<BranchStatus[]>([]);
+  const [branchId, setBranchId] = useState("");
+  const [roleName, setRoleName] = useState<"STAFF" | "BRANCH_MANAGER">("STAFF");
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const accessToken = sessionStorage.getItem("accessToken");
+    if (!accessToken) {
+      return;
+    }
+
+    void getBranches(accessToken)
+      .then((data) => {
+        const activeBranches = data.filter((branch) => branch.isActive);
+        setBranches(activeBranches);
+        // Admin phải chủ động chọn để tránh tạo nhân viên nhầm chi nhánh.
+        setBranchId("");
+      })
+      .catch((loadError) => {
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Không thể tải danh sách chi nhánh",
+        );
+      });
+  }, [open]);
 
   function resetForm() {
     setFullName("");
@@ -40,6 +74,8 @@ export default function StaffFormModal({ open, onClose, onSaved }: Props) {
     setPhone("");
     setPassword("");
     setConfirmPassword("");
+    setBranchId("");
+    setRoleName("STAFF");
     setShowPassword(false);
     setError("");
   }
@@ -60,7 +96,7 @@ export default function StaffFormModal({ open, onClose, onSaved }: Props) {
       setSaving(true);
       setError("");
 
-      const accessToken = localStorage.getItem("accessToken");
+      const accessToken = sessionStorage.getItem("accessToken");
 
       if (!accessToken) {
         throw new Error("Không tìm thấy phiên đăng nhập.");
@@ -90,17 +126,28 @@ export default function StaffFormModal({ open, onClose, onSaved }: Props) {
         throw new Error("Mật khẩu xác nhận không khớp.");
       }
 
+      if (!branchId) {
+        throw new Error("Vui lòng chọn chi nhánh cho nhân viên.");
+      }
+
       const created = await createStaff(accessToken, {
         fullName: fullName.trim(),
-
         email: normalizedEmail,
-
         phone: normalizedPhone,
-
         password,
+        branchId: Number(branchId),
       });
 
-      onSaved(created);
+      let savedUser = created;
+      if (roleName === "BRANCH_MANAGER") {
+        await assignBranchManager(accessToken, Number(branchId), created.id);
+        savedUser = {
+          ...created,
+          role: { name: "BRANCH_MANAGER" },
+        };
+      }
+
+      onSaved(savedUser);
 
       resetForm();
       onClose();
@@ -119,8 +166,8 @@ export default function StaffFormModal({ open, onClose, onSaved }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-xl rounded-2xl border border-[#E9E1D8] bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-[#E9E1D8] px-6 py-4">
+      <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-[#E9E1D8] bg-white shadow-xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-[#E9E1D8] px-6 py-4">
           <div>
             <h3 className="text-xl font-semibold text-[#1F1B18]">
               Thêm nhân viên
@@ -141,7 +188,10 @@ export default function StaffFormModal({ open, onClose, onSaved }: Props) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5 p-6">
+        <form
+          onSubmit={handleSubmit}
+          className="no-scrollbar min-h-0 space-y-5 overflow-y-auto overscroll-contain p-6"
+        >
           <ToastMessage message={error} />
 
           <div>
@@ -192,6 +242,39 @@ export default function StaffFormModal({ open, onClose, onSaved }: Props) {
 
           <div>
             <label className="mb-2 block text-sm font-medium text-[#1F1B18]">
+              Chi nhánh phụ trách
+            </label>
+            <select
+              value={branchId}
+              onChange={(event) => setBranchId(event.target.value)}
+              className="h-11 w-full rounded-xl border border-[#E9E1D8] bg-white px-4 text-sm outline-none transition focus:border-[#C9894B]"
+            >
+              <option value="">Chọn chi nhánh</option>
+              {branches.map((branch) => (
+                <option key={branch.id} value={branch.id}>
+                  {branch.code} - {branch.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-[#1F1B18]">
+              Vai trò
+            </label>
+            <select
+              value={roleName}
+              onChange={(event) =>
+                setRoleName(event.target.value as "STAFF" | "BRANCH_MANAGER")
+              }
+              className="h-11 w-full cursor-pointer rounded-xl border border-[#E9E1D8] bg-white px-4 text-sm outline-none transition focus:border-[#C9894B]"
+            >
+              <option value="STAFF">Nhân viên</option>
+              <option value="BRANCH_MANAGER">Nhân viên trưởng</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-2 block text-sm font-medium text-[#1F1B18]">
               Mật khẩu ban đầu
             </label>
 
@@ -228,9 +311,10 @@ export default function StaffFormModal({ open, onClose, onSaved }: Props) {
             />
           </div>
 
-          <div className="rounded-xl bg-[#FAF8F5] px-4 py-3 text-sm text-[#78866B]">
-            Tài khoản được tạo tại đây sẽ tự động có vai trò{" "}
-            <span className="font-semibold text-[#4A2C20]">Nhân viên</span>.
+          <div className="rounded-xl bg-[#FAF8F5] px-4 py-3 text-sm leading-6 text-[#78866B]">
+            {roleName === "BRANCH_MANAGER"
+              ? "Tài khoản sẽ quản lý nhân viên và chấm công tại chi nhánh đã chọn. Nếu chi nhánh đang có trưởng, trưởng cũ sẽ trở lại vai trò Nhân viên."
+              : "Tài khoản Nhân viên chỉ xử lý công việc trong chi nhánh và không có quyền quản lý nhân viên khác."}
           </div>
 
           <div className="flex justify-end gap-3 border-t border-[#F0E8E0] pt-5">

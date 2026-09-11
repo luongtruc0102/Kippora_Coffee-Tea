@@ -7,6 +7,10 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { UpdatePaymentStatusDto } from './dto/update-payment-status.dto';
+import {
+  flattenPersonProfile,
+  personProfileSelect,
+} from '../common/user-profiles/user-profiles.util';
 
 @Injectable()
 export class PaymentsService {
@@ -30,23 +34,17 @@ export class PaymentsService {
     });
 
     if (!order) {
-      throw new NotFoundException(
-        'Không tìm thấy đơn hàng',
-      );
+      throw new NotFoundException('Không tìm thấy đơn hàng');
     }
 
     // Mỗi Order chỉ có một Payment
     if (order.payment) {
-      throw new ConflictException(
-        'Đơn hàng đã có thông tin thanh toán',
-      );
+      throw new ConflictException('Đơn hàng đã có thông tin thanh toán');
     }
 
     // Không cho thanh toán đơn đã bị hủy
     if (order.status === 'CANCELLED') {
-      throw new BadRequestException(
-        'Không thể thanh toán đơn hàng đã bị hủy',
-      );
+      throw new BadRequestException('Không thể thanh toán đơn hàng đã bị hủy');
     }
 
     // Không tạo Payment mới cho đơn đã hoàn tất
@@ -60,9 +58,7 @@ export class PaymentsService {
       data: {
         orderId,
 
-        method: createPaymentDto.method as
-          | 'COD'
-          | 'BANK_TRANSFER',
+        method: createPaymentDto.method as 'COD' | 'BANK_TRANSFER',
 
         // Không nhận amount từ client, luôn lấy tổng tiền từ Order
         amount: order.totalPrice,
@@ -71,10 +67,7 @@ export class PaymentsService {
   }
 
   // User xem thông tin thanh toán của Order thuộc chính mình
-  async findMyPayment(
-    userId: number,
-    orderId: number,
-  ) {
+  async findMyPayment(userId: number, orderId: number) {
     const payment = await this.prisma.payment.findFirst({
       where: {
         orderId,
@@ -88,9 +81,7 @@ export class PaymentsService {
     });
 
     if (!payment) {
-      throw new NotFoundException(
-        'Không tìm thấy thông tin thanh toán',
-      );
+      throw new NotFoundException('Không tìm thấy thông tin thanh toán');
     }
 
     return payment;
@@ -98,15 +89,25 @@ export class PaymentsService {
 
   // ADMIN/STAFF xem toàn bộ thông tin thanh toán
   async findAll() {
-    return this.prisma.payment.findMany({
+    const payments = await this.prisma.payment.findMany({
       include: {
+        refund: true,
         order: {
           include: {
             user: {
               select: {
                 id: true,
                 email: true,
-                fullName: true,
+                ...personProfileSelect,
+              },
+            },
+            branch: {
+              select: {
+                id: true,
+                code: true,
+                name: true,
+                address: true,
+                phone: true,
               },
             },
           },
@@ -116,6 +117,14 @@ export class PaymentsService {
         createdAt: 'desc',
       },
     });
+
+    return payments.map(({ order, ...payment }) => ({
+      ...payment,
+      order: {
+        ...order,
+        user: flattenPersonProfile(order.user),
+      },
+    }));
   }
 
   // ADMIN/STAFF cập nhật trạng thái thanh toán
@@ -123,17 +132,14 @@ export class PaymentsService {
     id: number,
     updatePaymentStatusDto: UpdatePaymentStatusDto,
   ) {
-    const payment =
-      await this.prisma.payment.findUnique({
-        where: {
-          id,
-        },
-      });
+    const payment = await this.prisma.payment.findUnique({
+      where: {
+        id,
+      },
+    });
 
     if (!payment) {
-      throw new NotFoundException(
-        'Không tìm thấy thông tin thanh toán',
-      );
+      throw new NotFoundException('Không tìm thấy thông tin thanh toán');
     }
 
     // Payment đã PAID là trạng thái cuối, không được thay đổi lại
@@ -144,27 +150,15 @@ export class PaymentsService {
     }
 
     // Kiểm soát các bước chuyển trạng thái hợp lệ
-    const allowedTransitions: Record<
-      string,
-      string[]
-    > = {
-      PENDING: [
-        'PAID',
-        'FAILED',
-        'CANCELLED',
-      ],
+    const allowedTransitions: Record<string, string[]> = {
+      PENDING: ['PAID', 'FAILED', 'CANCELLED'],
       FAILED: ['PENDING'],
       CANCELLED: [],
     };
 
-    const allowedStatuses =
-      allowedTransitions[payment.status] ?? [];
+    const allowedStatuses = allowedTransitions[payment.status] ?? [];
 
-    if (
-      !allowedStatuses.includes(
-        updatePaymentStatusDto.status,
-      )
-    ) {
+    if (!allowedStatuses.includes(updatePaymentStatusDto.status)) {
       throw new BadRequestException(
         `Không thể chuyển trạng thái thanh toán từ ${payment.status} sang ${updatePaymentStatusDto.status}`,
       );
@@ -187,19 +181,12 @@ export class PaymentsService {
       },
       data: {
         status: updatePaymentStatusDto.status as
-          | 'PENDING'
-          | 'PAID'
-          | 'FAILED'
-          | 'CANCELLED',
+          'PENDING' | 'PAID' | 'FAILED' | 'CANCELLED',
 
-        transactionCode:
-          updatePaymentStatusDto.transactionCode,
+        transactionCode: updatePaymentStatusDto.transactionCode,
 
         // Chỉ ghi thời gian khi thanh toán thực sự thành công
-        paidAt:
-          updatePaymentStatusDto.status === 'PAID'
-            ? new Date()
-            : null,
+        paidAt: updatePaymentStatusDto.status === 'PAID' ? new Date() : null,
       },
     });
   }

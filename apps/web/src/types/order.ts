@@ -28,7 +28,12 @@ export type PaymentMethod = "COD" | "BANK_TRANSFER";
 
 export type FulfillmentMethod = "DELIVERY" | "PICKUP";
 
-export type PaymentStatus = "PENDING" | "PAID" | "FAILED" | "CANCELLED";
+export type OrderChannel = "ONLINE" | "POS";
+
+export type PaymentStatus =
+  "PENDING" | "PAID" | "FAILED" | "CANCELLED" | "REFUNDED";
+
+export type RefundMethod = "CASH" | "BANK_TRANSFER";
 
 export type DiscountType = "PERCENT" | "FIXED";
 
@@ -38,12 +43,31 @@ export type OrderUser = {
   fullName: string | null;
 };
 
+export type OrderBranch = {
+  id: number;
+  code: string;
+  name: string;
+  address: string;
+  phone: string | null;
+};
+
 export type OrderItemTopping = {
   id: number;
   orderItemId: number;
   toppingId: number;
   toppingName: string;
   toppingPrice: number | string;
+};
+
+export type OrderItemRecipeIngredient = {
+  id: number;
+  orderItemId: number;
+  ingredientId: number;
+  ingredientName: string;
+  unit: "GRAM" | "MILLILITER" | "PIECE";
+  sourceName: string;
+  quantityPerItem: number | string;
+  totalQuantity: number | string;
 };
 
 export type OrderItem = {
@@ -63,6 +87,8 @@ export type OrderItem = {
   lineTotal: number | string;
 
   toppings: OrderItemTopping[];
+
+  recipeIngredients?: OrderItemRecipeIngredient[];
 
   createdAt: string;
 };
@@ -93,11 +119,32 @@ export type OrderPayment = {
   updatedAt: string;
 };
 
+export type OrderRefund = {
+  id: number;
+  code: string;
+  orderId: number;
+  paymentId: number;
+  branchId: number;
+  amount: number | string;
+  method: RefundMethod;
+  reason: string;
+  processedById: number;
+  processedBy: OrderUser;
+  processedAt: string;
+  createdAt: string;
+};
+
 export type Order = {
   id: number;
 
+  channel: OrderChannel;
+  createdByStaffId: number | null;
+  posCustomerId: number | null;
+
   userId: number;
   user: OrderUser;
+  branch?: OrderBranch;
+  createdByStaff?: OrderUser | null;
 
   subtotal: number | string;
   discountAmount: number | string;
@@ -125,6 +172,7 @@ export type Order = {
   note: string | null;
 
   status: OrderStatus;
+  inventoryState?: "NOT_TRACKED" | "RESERVED" | "CONSUMED" | "RELEASED";
   cancelReason: string | null;
   cancelledAt: string | null;
 
@@ -143,6 +191,7 @@ export type Order = {
   voucherCode: string | null;
 
   payment: OrderPayment | null;
+  refund?: OrderRefund | null;
 
   items: OrderItem[];
 

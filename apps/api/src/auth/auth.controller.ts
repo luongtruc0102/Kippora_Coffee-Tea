@@ -1,18 +1,11 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Patch,
-  Post,
-  Req,
-} from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
-import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'; // Guard kiểm tra Access Token của người dùng
 import { Public } from '../common/decorators/public.decorator';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 // Request sau khi JwtAuthGuard xác thực sẽ có thông tin user
 interface AuthenticatedRequest extends Request {
@@ -56,9 +49,19 @@ export class AuthController {
     @Body()
     dto: UpdateProfileDto,
   ) {
-    return this.authService.updateProfile(
-      request.user.sub,
-      dto,
-    );
+    return this.authService.updateProfile(request.user.sub, dto);
+  }
+
+  // PATCH /auth/change-password
+  // Chỉ tài khoản đã đăng nhập mới được đổi mật khẩu của chính mình.
+  @Patch('change-password')
+  changePassword(
+    @Req()
+    request: AuthenticatedRequest,
+
+    @Body()
+    dto: ChangePasswordDto,
+  ) {
+    return this.authService.changePassword(request.user.sub, dto);
   }
 }

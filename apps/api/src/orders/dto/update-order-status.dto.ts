@@ -1,7 +1,4 @@
-import {
-  IsIn,
-  IsString,
-} from 'class-validator';
+import { IsIn, IsString } from 'class-validator';
 
 // Chỉ cho phép cập nhật sang những trạng thái đơn hàng hợp lệ.
 export class UpdateOrderStatusDto {

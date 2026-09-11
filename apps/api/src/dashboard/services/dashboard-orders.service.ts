@@ -14,23 +14,21 @@ export class DashboardOrdersService {
   // Thống kê số lượng đơn theo từng trạng thái trong khoảng thời gian
   async getOrderStatusStatistics(
     period: DashboardPeriod = '7D',
+    branchId?: number,
+    from?: string,
+    to?: string,
   ) {
-    const { startDate, endDate } =
-      getDashboardPeriodRange(period);
+    const { startDate, endDate } = getDashboardPeriodRange(period, from, to);
 
-    const statuses = [
-      'PENDING',
-      'CONFIRMED',
-      'PREPARING',
-      'DELIVERING',
-      'COMPLETED',
-      'CANCELLED',
-    ] as const;
+    // Dashboard Admin chỉ so sánh hai kết quả cuối cùng của đơn hàng.
+    // Các trạng thái đang xử lý được theo dõi tại khu vận hành chi nhánh.
+    const statuses = ['COMPLETED', 'CANCELLED'] as const;
 
     const counts = await Promise.all(
       statuses.map((status) =>
         this.prisma.order.count({
           where: {
+            ...(branchId ? { branchId } : {}),
             status,
             createdAt: {
               gte: startDate,
@@ -55,17 +53,17 @@ export class DashboardOrdersService {
   async getRecentOrders(
     limit = 5,
     period: DashboardPeriod = '7D',
+    branchId?: number,
+    from?: string,
+    to?: string,
   ) {
-    const safeLimit = Math.min(
-      Math.max(limit, 1),
-      20,
-    );
+    const safeLimit = Math.min(Math.max(limit, 1), 20);
 
-    const { startDate, endDate } =
-      getDashboardPeriodRange(period);
+    const { startDate, endDate } = getDashboardPeriodRange(period, from, to);
 
     const orders = await this.prisma.order.findMany({
       where: {
+        ...(branchId ? { branchId } : {}),
         createdAt: {
           gte: startDate,
           lte: endDate,
@@ -90,7 +88,7 @@ export class DashboardOrdersService {
           select: {
             id: true,
             email: true,
-            fullName: true,
+            profile: { select: { fullName: true } },
           },
         },
 
@@ -110,7 +108,11 @@ export class DashboardOrdersService {
       totalPrice: Number(order.totalPrice),
       status: order.status,
       createdAt: order.createdAt,
-      customer: order.user,
+      customer: {
+        id: order.user.id,
+        email: order.user.email,
+        fullName: order.user.profile?.fullName ?? null,
+      },
       payment: order.payment,
     }));
   }

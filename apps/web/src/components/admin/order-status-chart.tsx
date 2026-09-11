@@ -21,31 +21,6 @@ const statusConfig: Record<
     color: string;
   }
 > = {
-  PENDING: {
-    label: 'Chờ xác nhận',
-    color: '#D9A441',
-  },
-
-  CONFIRMED: {
-    label: 'Đã xác nhận',
-    color: '#5B8DEF',
-  },
-
-  PREPARING: {
-    label: 'Đang chuẩn bị',
-    color: '#9B7ED9',
-  },
-
-  READY_FOR_PICKUP: {
-    label: 'Sẵn sàng nhận',
-    color: '#2A9D8F',
-  },
-
-  DELIVERING: {
-    label: 'Đang giao',
-    color: '#4FA3B8',
-  },
-
   COMPLETED: {
     label: 'Hoàn thành',
     color: '#5F9E6E',
@@ -61,7 +36,13 @@ export default function OrderStatusChart({
   data,
 }: OrderStatusChartProps) {
   const chartData = data
-    .filter((item) => item.count > 0)
+    // Lọc thêm ở frontend để dữ liệu cache/API cũ cũng không làm hiện
+    // những trạng thái vận hành khác trong donut.
+    .filter(
+      (item) =>
+        (item.status === 'COMPLETED' || item.status === 'CANCELLED') &&
+        item.count > 0,
+    )
     .map((item) => ({
       ...item,
       label:
@@ -78,11 +59,11 @@ export default function OrderStatusChart({
     <div className="rounded-2xl border border-[#E9E1D8] bg-white p-5 shadow-sm">
       <div className="mb-5">
         <h3 className="text-lg font-semibold text-[#1F1B18]">
-          Trạng thái đơn hàng
+          Kết quả đơn hàng
         </h3>
 
         <p className="mt-1 text-sm text-[#78866B]">
-          Tỷ lệ đơn theo trạng thái hiện tại
+          Tỷ lệ đơn hoàn thành và đã hủy trong khoảng thời gian
         </p>
       </div>
 

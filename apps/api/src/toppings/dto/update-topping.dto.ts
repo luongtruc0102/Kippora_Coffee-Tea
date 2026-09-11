@@ -19,4 +19,8 @@ export class UpdateToppingDto {
   @IsNumber()
   @Min(0)
   price?: number;
+
+  @IsOptional()
+  @IsString()
+  imageUrl?: string;
 }

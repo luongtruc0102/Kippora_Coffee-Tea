@@ -4,5 +4,4 @@ import { SetMetadata } from '@nestjs/common';
 export const ROLES_KEY = 'roles';
 
 // Gắn các Role được phép truy cập vào API
-export const Roles = (...roles: string[]) =>
-  SetMetadata(ROLES_KEY, roles);
+export const Roles = (...roles: string[]) => SetMetadata(ROLES_KEY, roles);
