@@ -4,7 +4,10 @@ jest.mock('../prisma/prisma.service', () => ({
 
 import { NotFoundException } from '@nestjs/common';
 import type { PrismaService } from '../prisma/prisma.service';
-import { NotificationsService } from './notifications.service';
+import {
+  enrichOperationalNotification,
+  NotificationsService,
+} from './notifications.service';
 
 describe('NotificationsService', () => {
   function createService(prisma: Record<string, unknown>) {
@@ -115,5 +118,81 @@ describe('NotificationsService', () => {
     expect(updateInput).toBeDefined();
     expect(updateInput?.where).toEqual({ userId: 7, isRead: false });
     expect(updateInput?.data).toEqual({ isRead: true, readAt: result.readAt });
+  });
+
+  it('phân loại cảnh báo kho và gắn đúng màn hình xử lý cho Admin', () => {
+    const alert = enrichOperationalNotification(
+      {
+        id: 3,
+        userId: 7,
+        orderId: null,
+        type: 'LOW_STOCK',
+        title: 'Sắp hết sữa',
+        message: 'Kho chỉ còn 2 lít.',
+        dedupeKey: null,
+        isRead: false,
+        readAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      'ADMIN',
+    );
+
+    expect(alert).toEqual(
+      expect.objectContaining({
+        category: 'INVENTORY',
+        severity: 'WARNING',
+        actionUrl: '/admin/inventory',
+        requiresAction: true,
+      }),
+    );
+  });
+
+  it('xếp giao dịch sai số tiền vào cảnh báo khẩn cấp', () => {
+    const alert = enrichOperationalNotification(
+      {
+        id: 4,
+        userId: 7,
+        orderId: null,
+        type: 'BANK_RECONCILIATION_AMOUNT_MISMATCH',
+        title: 'Chuyển khoản sai số tiền',
+        message: 'Giao dịch cần kiểm tra.',
+        dedupeKey: 'BANK_RECONCILIATION:4',
+        isRead: false,
+        readAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      'ADMIN',
+    );
+
+    expect(alert.severity).toBe('CRITICAL');
+    expect(alert.category).toBe('PAYMENT');
+    expect(alert.actionUrl).toBe('/admin/bank-reconciliation');
+  });
+
+  it('chỉ đánh dấu đã đọc các thông báo thuộc nhóm vận hành', async () => {
+    const updateMany = jest.fn().mockResolvedValue({ count: 3 });
+    const service = createService({ notification: { updateMany } });
+
+    const result = await service.markAllOperationalRead(7);
+
+    expect(result.updatedCount).toBe(3);
+    expect(updateMany).toHaveBeenCalledWith({
+      where: {
+        userId: 7,
+        isRead: false,
+        type: {
+          // Matcher bất đối xứng của Jest được khai báo là any.
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+          in: expect.arrayContaining([
+            'LOW_STOCK',
+            'ATTENDANCE_MISSING',
+            'BANK_RECONCILIATION_AMOUNT_MISMATCH',
+          ]),
+        },
+      },
+      data: { isRead: true, readAt: result.readAt },
+    });
   });
 });

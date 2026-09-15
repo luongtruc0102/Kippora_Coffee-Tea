@@ -43,6 +43,8 @@ function mocks(options?: { amount?: number; existing?: object }) {
   const prisma = {
     bankTransaction: { findUnique: bankTransactionFindUnique },
     branchBankAccount: { findFirst: jest.fn().mockResolvedValue(account) },
+    user: { findMany: jest.fn().mockResolvedValue([{ id: 1 }]) },
+    notification: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
     payment: {
       findUnique: jest.fn().mockResolvedValue({
         id: 5,
@@ -99,6 +101,9 @@ describe('BankReconciliationService', () => {
     });
     expect(result.transaction).toEqual(
       expect.objectContaining({ status: 'AMOUNT_MISMATCH' }),
+    );
+    expect(prisma.notification.createMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skipDuplicates: true }),
     );
   });
 

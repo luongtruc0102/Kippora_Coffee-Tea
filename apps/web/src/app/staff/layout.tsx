@@ -2,6 +2,7 @@
 
 import {
   Banknote,
+  Bell,
   BookCheck,
   CalendarDays,
   ChevronDown,
@@ -75,6 +76,7 @@ export default function StaffLayout({
     "/staff/cash-reconciliation",
     "/staff/activity-logs",
     "/staff/month-close",
+    "/staff/notifications",
   ].some((route) => pathname.startsWith(route));
 
   useEffect(() => {
@@ -314,8 +316,21 @@ export default function StaffLayout({
                 {managementMenuOpen && (
                   <div
                     role="menu"
-                    className="absolute left-0 top-[calc(100%+0.5rem)] z-50 w-56 overflow-hidden rounded-2xl border border-[#E9E1D8] bg-white p-2 shadow-xl"
+                    className="absolute left-0 top-[calc(100%+0.5rem)] z-50 max-h-[calc(100vh-5rem)] w-56 overflow-y-auto rounded-2xl border border-[#E9E1D8] bg-white p-2 shadow-xl"
                   >
+                    <Link
+                      href="/staff/notifications"
+                      role="menuitem"
+                      onClick={() => setManagementMenuOpen(false)}
+                      className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
+                        pathname.startsWith("/staff/notifications")
+                          ? "bg-[#F3E9DE] text-[#4A2C20]"
+                          : "text-[#5E5650] hover:bg-[#FAF8F5] hover:text-[#4A2C20]"
+                      }`}
+                    >
+                      <Bell size={17} />
+                      Cảnh báo vận hành
+                    </Link>
                     <Link
                       href="/staff/schedules"
                       role="menuitem"

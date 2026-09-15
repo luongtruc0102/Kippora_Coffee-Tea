@@ -424,6 +424,30 @@ export class BankReconciliationService {
       afterData: transaction,
       metadata: { referenceCode },
     });
+    if (transaction && transaction.status !== 'MATCHED') {
+      const admins = await this.prisma.user.findMany({
+        where: { isActive: true, role: { name: 'ADMIN' } },
+        select: { id: true },
+      });
+      const recipientIds = [...new Set(admins.map((admin) => admin.id))];
+      if (recipientIds.length) {
+        const amountMismatch = transaction.status === 'AMOUNT_MISMATCH';
+        await this.prisma.notification.createMany({
+          data: recipientIds.map((userId) => ({
+            userId,
+            dedupeKey: `BANK_RECONCILIATION:${transaction.id}`,
+            type: amountMismatch
+              ? 'BANK_RECONCILIATION_AMOUNT_MISMATCH'
+              : 'BANK_RECONCILIATION_UNMATCHED',
+            title: amountMismatch
+              ? 'Chuyển khoản sai số tiền'
+              : 'Có chuyển khoản chưa khớp',
+            message: `${account.branch.code} · giao dịch ${transaction.providerReference} · ${Number(transaction.amount).toLocaleString('vi-VN')} đ cần Admin kiểm tra.`,
+          })),
+          skipDuplicates: true,
+        });
+      }
+    }
     return { transaction, duplicateDelivery: false };
   }
 

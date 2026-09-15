@@ -9,11 +9,58 @@ export type UserNotification = {
   readAt: string | null;
   createdAt: string;
   updatedAt: string;
+  category?: OperationalAlertCategory;
+  severity?: OperationalAlertSeverity;
+  actionUrl?: string;
+  requiresAction?: boolean;
 };
 
 export type NotificationList = {
   items: UserNotification[];
   unreadCount: number;
+};
+
+export type OperationalAlertCategory =
+  | "INVENTORY"
+  | "PROCUREMENT"
+  | "FINANCE"
+  | "STAFFING"
+  | "PAYMENT"
+  | "ACCOUNTING"
+  | "SYSTEM";
+
+export type OperationalAlertSeverity = "CRITICAL" | "WARNING" | "INFO";
+
+export type OperationalAlertsResponse = {
+  items: Array<
+    UserNotification & {
+      category: OperationalAlertCategory;
+      severity: OperationalAlertSeverity;
+      actionUrl: string;
+      requiresAction: boolean;
+    }
+  >;
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+  summary: {
+    total: number;
+    unread: number;
+    critical: number;
+    requiresAction: number;
+  };
+};
+
+export type OperationalAlertQuery = {
+  q?: string;
+  category?: OperationalAlertCategory | "ALL";
+  severity?: OperationalAlertSeverity | "ALL";
+  readStatus?: "ALL" | "UNREAD" | "READ";
+  page?: number;
+  limit?: number;
 };
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
@@ -51,6 +98,32 @@ export async function getMyNotifications(accessToken: string) {
   return parseResponse<NotificationList>(response, "Không thể tải thông báo");
 }
 
+export async function getOperationalAlerts(
+  accessToken: string,
+  query: OperationalAlertQuery,
+  signal?: AbortSignal,
+) {
+  const params = new URLSearchParams();
+  if (query.q) params.set("q", query.q);
+  if (query.category) params.set("category", query.category);
+  if (query.severity) params.set("severity", query.severity);
+  if (query.readStatus) params.set("readStatus", query.readStatus);
+  params.set("page", String(query.page || 1));
+  params.set("limit", String(query.limit || 20));
+  const response = await fetch(
+    `${getApiUrl()}/notifications/operational?${params.toString()}`,
+    {
+      headers: getHeaders(accessToken),
+      cache: "no-store",
+      signal,
+    },
+  );
+  return parseResponse<OperationalAlertsResponse>(
+    response,
+    "Không thể tải cảnh báo vận hành",
+  );
+}
+
 export async function markNotificationRead(
   accessToken: string,
   notificationId: number,
@@ -73,5 +146,19 @@ export async function markAllNotificationsRead(accessToken: string) {
   return parseResponse<{ updatedCount: number; readAt: string }>(
     response,
     "Không thể đánh dấu tất cả thông báo",
+  );
+}
+
+export async function markAllOperationalAlertsRead(accessToken: string) {
+  const response = await fetch(
+    `${getApiUrl()}/notifications/operational/read-all`,
+    {
+      method: "PATCH",
+      headers: getHeaders(accessToken),
+    },
+  );
+  return parseResponse<{ updatedCount: number; readAt: string }>(
+    response,
+    "Không thể đánh dấu tất cả cảnh báo",
   );
 }

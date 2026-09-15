@@ -221,11 +221,6 @@ const menuGroups = [
         href: "/admin/banners",
         icon: Images,
       },
-      {
-        label: "Thông báo",
-        href: "/admin/notifications",
-        icon: Bell,
-      },
     ],
   },
 
@@ -233,6 +228,11 @@ const menuGroups = [
     label: "Hệ thống",
 
     items: [
+      {
+        label: "Cảnh báo vận hành",
+        href: "/admin/notifications",
+        icon: Bell,
+      },
       {
         label: "Chi nhánh",
         href: "/admin/branches",

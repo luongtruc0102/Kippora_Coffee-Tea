@@ -140,7 +140,9 @@ export default function NotificationBell() {
     }
     dismissToast(notification.id);
     setOpen(false);
-    if (notification.type.startsWith("MONTH_CLOSE_")) {
+    if (notification.actionUrl) {
+      router.push(notification.actionUrl);
+    } else if (notification.type.startsWith("MONTH_CLOSE_")) {
       const storedUser = sessionStorage.getItem("user");
       let role = "BRANCH_MANAGER";
       try {
