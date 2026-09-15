@@ -80,6 +80,7 @@ function createMocks(options?: { openCashSessions?: number }) {
       findUnique: jest.fn().mockResolvedValue({ id: 6, status: 'FINALIZED' }),
     },
     staffProfile: { count: jest.fn().mockResolvedValue(2) },
+    bankTransaction: { count: jest.fn().mockResolvedValue(0) },
     auditLog: { create: jest.fn().mockResolvedValue({ id: 12 }) },
     $transaction: jest.fn(
       async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),

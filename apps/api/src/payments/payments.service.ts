@@ -11,6 +11,7 @@ import {
   flattenPersonProfile,
   personProfileSelect,
 } from '../common/user-profiles/user-profiles.util';
+import { createBankTransferMetadata } from './payment-reference.util';
 
 @Injectable()
 export class PaymentsService {
@@ -59,6 +60,7 @@ export class PaymentsService {
         orderId,
 
         method: createPaymentDto.method as 'COD' | 'BANK_TRANSFER',
+        ...createBankTransferMetadata(createPaymentDto.method),
 
         // Không nhận amount từ client, luôn lấy tổng tiền từ Order
         amount: order.totalPrice,
@@ -167,11 +169,10 @@ export class PaymentsService {
     // Chuyển khoản thành công phải có mã giao dịch để đối soát
     if (
       payment.method === 'BANK_TRANSFER' &&
-      updatePaymentStatusDto.status === 'PAID' &&
-      !updatePaymentStatusDto.transactionCode
+      updatePaymentStatusDto.status === 'PAID'
     ) {
       throw new BadRequestException(
-        'Thanh toán chuyển khoản thành công phải có mã giao dịch',
+        'Chuyển khoản chỉ được xác nhận qua đối soát ngân hàng',
       );
     }
 

@@ -28,6 +28,7 @@ import {
 import type { Order, OrderStatus } from "@/types/order";
 import { prepareReorderedCheckout } from "@/utils/cart.util";
 import OrderReviewSection from "@/components/user/order-review-section";
+import BankTransferPanel from "@/components/payments/bank-transfer-panel";
 
 function formatCurrency(value: number | string) {
   return new Intl.NumberFormat("vi-VN", {
@@ -132,7 +133,6 @@ export default function UserOrderDetailPage() {
             id: ++toastIdRef.current,
             message: `Trạng thái đơn hàng đã cập nhật: ${getStatusLabel(
               nextOrder.status,
-
             )}.`,
             variant: "info",
           });
@@ -618,12 +618,30 @@ export default function UserOrderDetailPage() {
         </div>
       </section>
 
-      {order.status ===
-        "COMPLETED" && (
-        <OrderReviewSection
-          orderId={order.id}
-          items={order.items}
-        />
+      {order.payment?.method === "BANK_TRANSFER" &&
+        order.payment.status !== "CANCELLED" &&
+        order.payment.status !== "REFUNDED" &&
+        order.status !== "CANCELLED" && (
+          <div className="mt-6">
+            <BankTransferPanel
+              target={{ orderId: order.id }}
+              initialStatus={order.payment.status}
+              onPaid={() =>
+                setOrder((current) =>
+                  current?.payment
+                    ? {
+                        ...current,
+                        payment: { ...current.payment, status: "PAID" },
+                      }
+                    : current,
+                )
+              }
+            />
+          </div>
+        )}
+
+      {order.status === "COMPLETED" && (
+        <OrderReviewSection orderId={order.id} items={order.items} />
       )}
 
       <div className="mt-6 flex flex-wrap justify-center gap-3">

@@ -112,6 +112,8 @@ export type OrderPayment = {
   amount: number | string;
 
   transactionCode: string | null;
+  referenceCode: string | null;
+  expiresAt: string | null;
 
   paidAt: string | null;
 

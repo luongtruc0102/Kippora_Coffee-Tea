@@ -13,6 +13,8 @@ export type PaymentRecord = {
   status: PaymentStatus;
   amount: number | string;
   transactionCode: string | null;
+  referenceCode: string | null;
+  expiresAt: string | null;
   paidAt: string | null;
   createdAt: string;
   updatedAt: string;

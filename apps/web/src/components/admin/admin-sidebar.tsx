@@ -22,6 +22,7 @@ import {
   Package,
   PackagePlus,
   ScrollText,
+  ScanSearch,
   Settings,
   ShoppingBag,
   Star,
@@ -69,6 +70,11 @@ const menuGroups = [
         label: "Thanh toán",
         href: "/admin/payments",
         icon: CreditCard,
+      },
+      {
+        label: "Đối soát ngân hàng",
+        href: "/admin/bank-reconciliation",
+        icon: ScanSearch,
       },
       {
         label: "Giá vốn & lợi nhuận",

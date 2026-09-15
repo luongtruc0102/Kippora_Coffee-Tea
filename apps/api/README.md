@@ -31,6 +31,27 @@
 $ npm install
 ```
 
+Copy `.env.example` to `.env`, then replace the sample database, JWT and
+webhook secrets before starting the API.
+
+## Bank transfer reconciliation
+
+The system generates VietQR payloads locally, so account numbers and payment
+references are not sent to a third-party QR image service. Configure each
+branch account in **Admin > Bank reconciliation**.
+
+A banking provider can deliver transactions to:
+
+```text
+POST /payments/webhooks/bank-transfer
+x-webhook-secret: <BANK_WEBHOOK_SECRET>
+```
+
+The adapter must send a unique provider reference, receiving account number,
+amount, description and transaction time. A payment is confirmed only when the
+transfer reference and amount both match. Unmatched, duplicate and wrong-amount
+transactions remain in the reconciliation queue for an Admin to resolve.
+
 ## Compile and run the project
 
 ```bash

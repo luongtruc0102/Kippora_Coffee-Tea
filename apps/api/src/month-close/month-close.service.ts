@@ -180,6 +180,7 @@ export class MonthCloseService {
       payrollPeriod,
       activeStaff,
       cashDifferences,
+      unresolvedBankTransactions,
     ] = await Promise.all([
       this.profitabilityService.getReport({
         branchId: branch.id,
@@ -243,6 +244,13 @@ export class MonthCloseService {
           difference: { not: 0 },
         },
       }),
+      this.prisma.bankTransaction.count({
+        where: {
+          bankAccount: { branchId: branch.id },
+          occurredAt: { gte: range.periodStart, lt: range.periodEnd },
+          status: { in: ['UNMATCHED', 'AMOUNT_MISMATCH', 'DUPLICATE'] },
+        },
+      }),
     ]);
 
     const todayKey = vietnamDateFormatter.format(new Date());
@@ -300,6 +308,12 @@ export class MonthCloseService {
         ? 1
         : 0,
       '/admin/payroll',
+    );
+    addBlocker(
+      'BANK_RECONCILIATION_PENDING',
+      'Giao dịch ngân hàng chưa đối soát xong',
+      unresolvedBankTransactions,
+      '/admin/bank-reconciliation',
     );
     addBlocker(
       'MISSING_INVENTORY_COST',

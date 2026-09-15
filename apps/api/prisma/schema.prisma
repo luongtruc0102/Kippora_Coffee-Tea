@@ -90,6 +90,8 @@ model User {
   closedMonthlyPeriods       MonthlyClosePeriod[]         @relation("MonthlyCloseCloser")
   reopenedMonthlyPeriods     MonthlyClosePeriod[]         @relation("MonthlyCloseReopener")
   monthlyCloseEvents         MonthlyCloseEvent[]          @relation("MonthlyCloseEventActor")
+  /// Các giao dịch ngân hàng do Admin xử lý thủ công khi đối soát.
+  resolvedBankTransactions   BankTransaction[]            @relation("BankTransactionResolver")
 
   // Trạng thái tài khoản: true = hoạt động, false = bị khóa
   isActive Boolean @default(true)
@@ -934,17 +936,91 @@ model Payment {
   // Mã giao dịch từ ngân hàng/cổng thanh toán nếu có
   transactionCode String?
 
+  /// Nội dung chuyển khoản duy nhất được sinh trên server và in vào VietQR.
+  referenceCode String?   @unique @db.VarChar(32)
+  /// Thời điểm QR hết hạn hiển thị; giao dịch đến muộn vẫn được giữ để Admin đối soát.
+  expiresAt     DateTime?
+
   // Thời điểm thanh toán thành công
   paidAt DateTime?
 
   /// Chứng từ hoàn toàn bộ giao dịch; mỗi Payment chỉ có tối đa một chứng từ.
-  refund PaymentRefund?
+  refund          PaymentRefund?
+  /// Giao dịch ngân hàng đã được ghép chính thức với thanh toán này.
+  bankTransaction BankTransaction? @relation("MatchedPayment")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([status])
   @@index([method])
+}
+
+/// Trạng thái đối soát của một dòng tiền ngân hàng nhận vào hệ thống.
+enum BankTransactionStatus {
+  UNMATCHED
+  MATCHED
+  AMOUNT_MISMATCH
+  DUPLICATE
+  IGNORED
+}
+
+/// Tài khoản ngân hàng nhận tiền theo từng chi nhánh.
+/// Chỉ lưu thông tin công khai để tạo QR; khóa API/webhook được giữ trong biến môi trường.
+model BranchBankAccount {
+  id Int @id @default(autoincrement())
+
+  branchId Int         @unique
+  branch   StoreBranch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  /// BIN sáu số theo danh mục ngân hàng hỗ trợ VietQR.
+  bankBin       String  @db.VarChar(6)
+  bankCode      String  @db.VarChar(20)
+  bankName      String  @db.VarChar(120)
+  accountNumber String  @db.VarChar(30)
+  accountName   String  @db.VarChar(100)
+  isActive      Boolean @default(true)
+
+  transactions BankTransaction[]
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@index([isActive])
+}
+
+/// Sao kê giao dịch nhận từ webhook ngân hàng/cổng thanh toán.
+/// providerReference chống nhận trùng khi nhà cung cấp gửi lại cùng một webhook.
+model BankTransaction {
+  id Int @id @default(autoincrement())
+
+  bankAccountId Int
+  bankAccount   BranchBankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Restrict)
+
+  providerReference String                @db.VarChar(100)
+  amount            Decimal               @db.Decimal(16, 2)
+  description       String                @db.VarChar(500)
+  occurredAt        DateTime
+  status            BankTransactionStatus @default(UNMATCHED)
+
+  /// Chỉ có khi số tiền và mã tham chiếu đã được xác nhận khớp.
+  matchedPaymentId Int?      @unique
+  matchedPayment   Payment?  @relation("MatchedPayment", fields: [matchedPaymentId], references: [id], onDelete: Restrict)
+  matchedAt        DateTime?
+
+  /// Lý do bỏ qua hoặc ghi chú xử lý thủ công.
+  resolutionNote String? @db.VarChar(500)
+  resolvedById   Int?
+  resolvedBy     User?   @relation("BankTransactionResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  rawPayload     Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([bankAccountId, providerReference])
+  @@index([bankAccountId, occurredAt])
+  @@index([status, occurredAt])
+  @@index([matchedPaymentId])
+  @@index([resolvedById, updatedAt])
 }
 
 /// Chứng từ hoàn toàn bộ tiền của một đơn đã thanh toán.
@@ -1126,6 +1202,8 @@ model StoreBranch {
   productPriceHistory   ProductPriceHistory[]
   /// Các kỳ kế toán tháng của chi nhánh.
   monthlyClosePeriods   MonthlyClosePeriod[]
+  /// Tài khoản nhận chuyển khoản dùng để tạo VietQR cho chi nhánh.
+  bankAccount           BranchBankAccount?
 }
 
 /// Lịch sử giá bán bất biến của từng size sau khi được Admin xác nhận áp dụng.

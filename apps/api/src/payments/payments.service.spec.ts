@@ -75,27 +75,19 @@ describe('PaymentsService management', () => {
     expect(paymentUpdate).not.toHaveBeenCalled();
   });
 
-  it('ghi nhận thời điểm và mã giao dịch khi thanh toán thành công', async () => {
+  it('không cho đánh dấu chuyển khoản đã thanh toán ngoài luồng đối soát', async () => {
     paymentFindUnique.mockResolvedValue({
       id: 8,
       method: 'BANK_TRANSFER',
       status: 'PENDING',
     });
-    paymentUpdate.mockResolvedValue({ id: 8, status: 'PAID' });
 
-    await service.updateStatus(8, {
-      status: 'PAID',
-      transactionCode: 'BANK-20260829-001',
-    });
-
-    expect(paymentUpdate).toHaveBeenCalledWith({
-      where: { id: 8 },
-      data: {
+    await expect(
+      service.updateStatus(8, {
         status: 'PAID',
         transactionCode: 'BANK-20260829-001',
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        paidAt: expect.any(Date),
-      },
-    });
+      }),
+    ).rejects.toThrow('đối soát ngân hàng');
+    expect(paymentUpdate).not.toHaveBeenCalled();
   });
 });

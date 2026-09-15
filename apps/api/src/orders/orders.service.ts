@@ -19,6 +19,7 @@ import {
 } from '../common/user-profiles/user-profiles.util';
 import { writeAuditLog } from '../common/audit-logs/audit-log.util';
 import { CancelManagedOrderDto } from './dto/cancel-managed-order.dto';
+import { createBankTransferMetadata } from '../payments/payment-reference.util';
 
 const refundInclude = {
   processedBy: {
@@ -902,6 +903,7 @@ export class OrdersService {
             create: {
               method: checkoutDto.paymentMethod,
               amount: totalPrice,
+              ...createBankTransferMetadata(checkoutDto.paymentMethod),
             },
           },
 
@@ -1261,6 +1263,7 @@ export class OrdersService {
     const loyaltyDiscountAmount = loyaltyPointsUsed;
     const totalPrice = subtotal - loyaltyDiscountAmount;
     const paidAt = new Date();
+    const isBankTransfer = createPosOrderDto.paymentMethod === 'BANK_TRANSFER';
 
     const order = await this.prisma.$transaction(async (tx) => {
       if (loyaltyPointsUsed > 0) {
@@ -1315,9 +1318,12 @@ export class OrdersService {
                 createPosOrderDto.paymentMethod === 'CASH'
                   ? 'COD'
                   : 'BANK_TRANSFER',
-              status: 'PAID',
+              status: isBankTransfer ? 'PENDING' : 'PAID',
               amount: totalPrice,
-              paidAt,
+              paidAt: isBankTransfer ? null : paidAt,
+              ...createBankTransferMetadata(
+                isBankTransfer ? 'BANK_TRANSFER' : 'COD',
+              ),
             },
           },
           items: {
@@ -2017,6 +2023,9 @@ export class OrdersService {
       where: {
         id,
       },
+      include: {
+        payment: { select: { method: true, status: true } },
+      },
     });
 
     if (!order) {
@@ -2057,6 +2066,16 @@ export class OrdersService {
     if (!allowedStatuses.includes(status)) {
       throw new BadRequestException(
         `Không thể chuyển trạng thái từ ${order.status} sang ${status}`,
+      );
+    }
+
+    if (
+      status === 'PREPARING' &&
+      order.payment?.method === 'BANK_TRANSFER' &&
+      order.payment.status !== 'PAID'
+    ) {
+      throw new BadRequestException(
+        'Chưa thể pha chế: đơn chuyển khoản chưa được ngân hàng đối soát',
       );
     }
 

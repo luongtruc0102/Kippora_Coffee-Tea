@@ -12,6 +12,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
+import Link from "next/link";
 
 import type { PaymentStatus } from "@/types/order";
 import type { ManagedPayment, UpdatePaymentStatusInput } from "@/types/payment";
@@ -199,6 +200,13 @@ export default function PaymentDetailModal({
                 label="Mã giao dịch"
                 value={payment.transactionCode || "Chưa có"}
               />
+              {payment.method === "BANK_TRANSFER" && (
+                <InfoCard
+                  icon={<Hash size={18} />}
+                  label="Nội dung chuyển khoản"
+                  value={payment.referenceCode || "Chưa tạo"}
+                />
+              )}
               <InfoCard
                 icon={<CalendarClock size={18} />}
                 label="Thời điểm thanh toán"
@@ -282,7 +290,27 @@ export default function PaymentDetailModal({
             </div>
           </section>
 
-          {allowedStatuses.length > 0 && (
+          {payment.method === "BANK_TRANSFER" &&
+            payment.status === "PENDING" && (
+              <section className="rounded-2xl border border-blue-100 bg-blue-50 p-5">
+                <p className="font-semibold text-blue-800">
+                  Đang chờ đối soát ngân hàng
+                </p>
+                <p className="mt-1 text-sm leading-6 text-blue-700">
+                  Hệ thống chỉ xác nhận khi sao kê khớp đúng mã và số tiền,
+                  tránh đánh dấu nhầm bằng tay.
+                </p>
+                <Link
+                  href="/admin/bank-reconciliation"
+                  onClick={onClose}
+                  className="mt-3 inline-flex text-sm font-bold text-blue-800 underline"
+                >
+                  Mở trang đối soát
+                </Link>
+              </section>
+            )}
+
+          {allowedStatuses.length > 0 && payment.method !== "BANK_TRANSFER" && (
             <form
               onSubmit={handleSubmit}
               className="rounded-2xl border border-[#E9E1D8] bg-[#FCFAF7] p-5"
@@ -291,7 +319,7 @@ export default function PaymentDetailModal({
                 Cập nhật trạng thái
               </h4>
 
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div className="mt-4">
                 <div>
                   <label
                     htmlFor="payment-next-status"
@@ -317,28 +345,6 @@ export default function PaymentDetailModal({
                   </select>
                 </div>
 
-                <div>
-                  <label
-                    htmlFor="payment-transaction-code"
-                    className="mb-2 block text-sm font-semibold text-[#4A2C20]"
-                  >
-                    Mã giao dịch
-                    {payment.method === "BANK_TRANSFER" && nextStatus === "PAID"
-                      ? " *"
-                      : ""}
-                  </label>
-                  <input
-                    id="payment-transaction-code"
-                    value={transactionCode}
-                    disabled={updating}
-                    onChange={(event) => {
-                      setTransactionCode(event.target.value);
-                      setFormError("");
-                    }}
-                    placeholder="Nhập khi xác nhận chuyển khoản"
-                    className="h-11 w-full rounded-xl border border-[#E9E1D8] bg-white px-4 text-sm outline-none focus:border-[#C9894B] disabled:cursor-wait"
-                  />
-                </div>
               </div>
 
               {formError && (

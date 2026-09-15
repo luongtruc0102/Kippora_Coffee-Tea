@@ -21,6 +21,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import OrderReceiptContent from "@/components/staff/order-receipt-content";
+import BankTransferPanel from "@/components/payments/bank-transfer-panel";
 import { useAppToast } from "@/components/ui/app-toast-provider";
 import {
   getPublicCategories,
@@ -964,6 +965,28 @@ export default function StaffPosPage() {
               id="pos-receipt-content"
               order={completedOrder}
             />
+
+            {completedOrder.payment?.method === "BANK_TRANSFER" &&
+              completedOrder.payment.status !== "REFUNDED" &&
+              completedOrder.payment.status !== "CANCELLED" && (
+                <div className="px-5 pb-5">
+                  <BankTransferPanel
+                    compact
+                    target={{ paymentId: completedOrder.payment.id }}
+                    initialStatus={completedOrder.payment.status}
+                    onPaid={() =>
+                      setCompletedOrder((current) =>
+                        current?.payment
+                          ? {
+                              ...current,
+                              payment: { ...current.payment, status: "PAID" },
+                            }
+                          : current,
+                      )
+                    }
+                  />
+                </div>
+              )}
 
             <div className="pos-receipt-actions grid gap-2 border-t border-[#F0E8E0] bg-white p-5 sm:grid-cols-3">
               <button

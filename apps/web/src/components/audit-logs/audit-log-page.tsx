@@ -42,7 +42,7 @@ const moduleView: Record<AuditModule, { label: string; className: string }> = {
   },
   ORDER: { label: "Đơn hàng", className: "bg-orange-50 text-orange-700" },
   PAYMENT: {
-    label: "Hoàn tiền",
+    label: "Thanh toán",
     className: "bg-fuchsia-50 text-fuchsia-700",
   },
   PRICING: {
@@ -113,6 +113,12 @@ const actionLabels: Record<string, string> = {
   APPLY_PRICE: "Áp dụng giá bán mới",
   CLOSE_MONTH: "Chốt sổ tháng",
   REOPEN_MONTH: "Mở lại kỳ kế toán",
+  CREATE_BANK_ACCOUNT: "Cấu hình tài khoản nhận tiền",
+  UPDATE_BANK_ACCOUNT: "Cập nhật tài khoản nhận tiền",
+  RECEIVE_BANK_TRANSACTION: "Nhận giao dịch chuyển khoản",
+  AUTO_MATCH: "Tự động đối soát chuyển khoản",
+  MANUAL_MATCH: "Ghép giao dịch thủ công",
+  IGNORE_BANK_TRANSACTION: "Bỏ qua giao dịch chuyển khoản",
 };
 
 const fieldLabels: Record<string, string> = {
@@ -207,6 +213,20 @@ const fieldLabels: Record<string, string> = {
   reviewedBy: "Người duyệt",
   cashRefundAmount: "Hoàn bằng tiền mặt",
   bankRefundAmount: "Hoàn bằng chuyển khoản",
+  bankAccount: "Tài khoản nhận tiền",
+  bankBin: "Mã BIN ngân hàng",
+  bankCode: "Mã ngân hàng",
+  bankName: "Tên ngân hàng",
+  accountNumber: "Số tài khoản",
+  accountName: "Tên chủ tài khoản",
+  providerReference: "Mã giao dịch ngân hàng",
+  occurredAt: "Thời gian giao dịch",
+  referenceCode: "Nội dung chuyển khoản",
+  matchedPayment: "Thanh toán đã ghép",
+  matchedAt: "Thời gian đối soát",
+  resolvedBy: "Người xử lý",
+  resolutionNote: "Ghi chú xử lý",
+  duplicateOfId: "Giao dịch gốc",
 };
 
 const hiddenFields = new Set([
@@ -226,6 +246,10 @@ const hiddenFields = new Set([
   "createdAt",
   "updatedAt",
   "_count",
+  "rawPayload",
+  "bankAccountId",
+  "matchedPaymentId",
+  "resolvedById",
 ]);
 
 const fieldPriority: Record<string, number> = {
@@ -285,6 +309,11 @@ const valueLabels: Record<string, string> = {
   EXPIRED: "Hết hạn",
   LOSS: "Thất thoát",
   COUNTING_ERROR: "Sai lệch lần đếm trước",
+  UNMATCHED: "Chưa tìm thấy thanh toán",
+  MATCHED: "Đã khớp",
+  AMOUNT_MISMATCH: "Sai số tiền",
+  DUPLICATE: "Giao dịch trùng",
+  IGNORED: "Đã bỏ qua",
 };
 
 const moneyFields = new Set([
@@ -477,6 +506,18 @@ function friendlyDescription(item: AuditLogItem) {
       return "Hủy đơn hàng chưa thanh toán";
     case "REFUND_AND_CANCEL_ORDER":
       return "Hủy đơn hàng và hoàn lại toàn bộ số tiền đã thu";
+    case "CREATE_BANK_ACCOUNT":
+      return "Cấu hình tài khoản nhận chuyển khoản cho chi nhánh";
+    case "UPDATE_BANK_ACCOUNT":
+      return "Cập nhật tài khoản nhận chuyển khoản của chi nhánh";
+    case "RECEIVE_BANK_TRANSACTION":
+      return "Nhận giao dịch chuyển khoản cần kiểm tra";
+    case "AUTO_MATCH":
+      return "Tự động khớp đúng nội dung và số tiền thanh toán";
+    case "MANUAL_MATCH":
+      return "Admin ghép giao dịch với một thanh toán đang chờ";
+    case "IGNORE_BANK_TRANSACTION":
+      return "Admin xác nhận bỏ qua giao dịch không dùng để thanh toán";
     default:
       return item.description;
   }
