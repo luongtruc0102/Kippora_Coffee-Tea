@@ -23,15 +23,39 @@ describe('ProfitabilityService', () => {
               channel: 'POS',
               status: 'CANCELLED',
               inventoryState: 'CONSUMED',
+              deliveryFee: 5_000,
               branch: { code: 'MAIN', name: 'Kippora - Q9' },
               refund: {
                 amount: 10_000,
                 processedAt: new Date('2026-09-11T04:00:00.000Z'),
               },
               ingredientLotAllocations: [
-                { quantity: 2, unitCost: 15_000, costAmount: 30_000 },
+                {
+                  quantity: 2,
+                  unitCost: 15_000,
+                  costAmount: 30_000,
+                  reservation: { ingredientId: 1 },
+                },
               ],
               inventoryReservations: [{ ingredientId: 1, quantity: 2 }],
+              items: [
+                {
+                  id: 101,
+                  productId: 7,
+                  productName: 'Bạc Sỉu',
+                  size: 'S',
+                  quantity: 2,
+                  lineTotal: 100_000,
+                  recipeIngredients: [
+                    {
+                      ingredientId: 1,
+                      ingredientName: 'Sữa',
+                      unit: 'MILLILITER',
+                      totalQuantity: 2,
+                    },
+                  ],
+                },
+              ],
             },
           },
         ]),
@@ -44,6 +68,16 @@ describe('ProfitabilityService', () => {
             amount: 10_000,
             processedAt: new Date('2026-09-11T04:00:00.000Z'),
             orderId: 12,
+            order: {
+              deliveryFee: 5_000,
+              items: [
+                {
+                  productId: 7,
+                  productName: 'Bạc Sỉu',
+                  lineTotal: 100_000,
+                },
+              ],
+            },
           },
         ]),
       },
@@ -126,6 +160,33 @@ describe('ProfitabilityService', () => {
     expect(result.branches[0].netProfit).toBe(33_000);
     expect(result.orders[0]).toEqual(
       expect.objectContaining({ orderId: 12, cogs: 30_000 }),
+    );
+    expect(result.products).toEqual([
+      expect.objectContaining({
+        productId: 7,
+        productName: 'Bạc Sỉu',
+        quantitySold: 2,
+        orderCount: 1,
+        grossRevenue: 95_000,
+        refunds: 5_000,
+        netRevenue: 90_000,
+        cogs: 30_000,
+        grossProfit: 60_000,
+        grossMarginPercent: 66.67,
+        averageSellingPrice: 45_000,
+        averageUnitCost: 15_000,
+        costSource: 'LOT',
+        status: 'HEALTHY',
+      }),
+    ]);
+    expect(result.products[0].ingredients[0]).toEqual(
+      expect.objectContaining({
+        ingredientId: 1,
+        ingredientName: 'Sữa',
+        quantity: 2,
+        costAmount: 30_000,
+        costSharePercent: 100,
+      }),
     );
   });
 });

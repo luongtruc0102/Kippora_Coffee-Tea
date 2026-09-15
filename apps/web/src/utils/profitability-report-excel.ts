@@ -133,6 +133,62 @@ export function buildProfitabilityReportExcel(
   timeline.getColumn(1).numFmt = "dd/mm/yyyy";
   for (let column = 2; column <= 9; column += 1) timeline.getColumn(column).numFmt = MONEY_FORMAT;
 
+  const products = workbook.addWorksheet("Lợi nhuận từng món", { views: [{ state: "frozen", ySplit: 1 }] });
+  products.columns = [12, 32, 14, 14, 20, 20, 20, 16, 20, 22];
+  products.addRow(["Mã món", "Tên món", "Số ly bán", "Số đơn", "Doanh thu thuần", "Giá vốn", "Lãi gộp", "Biên lãi", "Nguồn giá vốn", "Đánh giá"]);
+  header(products.getRow(1), 10);
+  report.products.forEach((product) => {
+    products.addRow([
+      product.productId,
+      safeText(product.productName),
+      product.quantitySold,
+      product.orderCount,
+      product.netRevenue,
+      product.cogs,
+      product.grossProfit,
+      product.grossMarginPercent / 100,
+      product.costSource === "LOT"
+        ? "Theo lô thực tế"
+        : product.costSource === "ESTIMATED"
+          ? "Giá lô ước tính"
+          : product.costSource === "MIXED"
+            ? "Thực tế và ước tính"
+            : "Thiếu dữ liệu",
+      product.status === "HEALTHY"
+        ? "Lãi tốt"
+        : product.status === "LOW_MARGIN"
+          ? "Lãi thấp"
+          : product.status === "LOSS"
+            ? "Đang lỗ"
+            : "Thiếu giá vốn",
+    ]);
+  });
+  styleRows(products, 2, report.products.length + 1);
+  for (let column = 5; column <= 7; column += 1) products.getColumn(column).numFmt = MONEY_FORMAT;
+  products.getColumn(8).numFmt = "0.00%";
+
+  const productIngredients = workbook.addWorksheet("Giá vốn nguyên liệu món", { views: [{ state: "frozen", ySplit: 1 }] });
+  productIngredients.columns = [12, 30, 28, 14, 18, 20, 16];
+  productIngredients.addRow(["Mã món", "Tên món", "Nguyên liệu", "Đơn vị", "Lượng đã dùng", "Thành tiền", "Tỷ trọng"]);
+  header(productIngredients.getRow(1), 7);
+  report.products.forEach((product) => {
+    product.ingredients.forEach((ingredient) => {
+      productIngredients.addRow([
+        product.productId,
+        safeText(product.productName),
+        safeText(ingredient.ingredientName),
+        ingredient.unit === "GRAM" ? "g" : ingredient.unit === "MILLILITER" ? "ml" : ingredient.unit === "PIECE" ? "cái" : safeText(ingredient.unit),
+        ingredient.quantity,
+        ingredient.costAmount,
+        ingredient.costSharePercent / 100,
+      ]);
+    });
+  });
+  styleRows(productIngredients, 2, Math.max(1, productIngredients.rowCount));
+  productIngredients.getColumn(5).numFmt = "#,##0.000";
+  productIngredients.getColumn(6).numFmt = MONEY_FORMAT;
+  productIngredients.getColumn(7).numFmt = "0.00%";
+
   const orders = workbook.addWorksheet("Chi tiết đơn", { views: [{ state: "frozen", ySplit: 1 }] });
   orders.columns = [12, 15, 30, 15, 21, 20, 20, 20, 17, 22];
   orders.addRow(["Mã đơn", "Mã CN", "Chi nhánh", "Nguồn", "Ngày thu", "Doanh thu", "Hoàn tiền", "Giá vốn", "Lãi sau hoàn", "Cảnh báo"]);

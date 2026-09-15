@@ -30,6 +30,30 @@ type BranchAccumulator = FinancialTotals & {
   refundCount: number;
 };
 
+type ProductCostSource = 'LOT' | 'ESTIMATED' | 'MISSING';
+
+type ProductIngredientAccumulator = {
+  ingredientId: number | null;
+  ingredientName: string;
+  unit: string;
+  quantity: number;
+  costAmount: number;
+};
+
+type ProductAccumulator = {
+  productId: number;
+  productName: string;
+  quantitySold: number;
+  grossRevenue: number;
+  refunds: number;
+  cogs: number;
+  orderIds: Set<number>;
+  costSources: Set<ProductCostSource>;
+  ingredients: Map<string, ProductIngredientAccumulator>;
+};
+
+const LOW_MARGIN_PERCENT = 30;
+
 function emptyFinancials(): FinancialTotals {
   return {
     grossRevenue: 0,
@@ -54,6 +78,24 @@ function round(value: number) {
 
 function margin(profit: number, revenue: number) {
   return revenue === 0 ? 0 : round((profit / revenue) * 100);
+}
+
+function allocateAmount(total: number, weights: number[]) {
+  if (!weights.length) return [];
+  const safeWeights = weights.map((weight) => Math.max(0, weight));
+  const weightTotal = safeWeights.reduce((sum, weight) => sum + weight, 0);
+  const effectiveWeights = weightTotal > 0 ? safeWeights : weights.map(() => 1);
+  const effectiveTotal = effectiveWeights.reduce(
+    (sum, weight) => sum + weight,
+    0,
+  );
+  let remaining = round(total);
+  return effectiveWeights.map((weight, index) => {
+    if (index === effectiveWeights.length - 1) return remaining;
+    const share = round((total * weight) / effectiveTotal);
+    remaining = round(remaining - share);
+    return share;
+  });
 }
 
 function dateValue(value: string) {
@@ -127,14 +169,34 @@ export class ProfitabilityService {
                 channel: true,
                 status: true,
                 inventoryState: true,
+                deliveryFee: true,
                 branch: { select: { code: true, name: true } },
                 refund: { select: { amount: true, processedAt: true } },
+                items: {
+                  select: {
+                    id: true,
+                    productId: true,
+                    productName: true,
+                    size: true,
+                    quantity: true,
+                    lineTotal: true,
+                    recipeIngredients: {
+                      select: {
+                        ingredientId: true,
+                        ingredientName: true,
+                        unit: true,
+                        totalQuantity: true,
+                      },
+                    },
+                  },
+                },
                 ingredientLotAllocations: {
                   where: { state: 'CONSUMED' },
                   select: {
                     quantity: true,
                     unitCost: true,
                     costAmount: true,
+                    reservation: { select: { ingredientId: true } },
                   },
                 },
                 inventoryReservations: {
@@ -157,6 +219,18 @@ export class ProfitabilityService {
             amount: true,
             processedAt: true,
             orderId: true,
+            order: {
+              select: {
+                deliveryFee: true,
+                items: {
+                  select: {
+                    productId: true,
+                    productName: true,
+                    lineTotal: true,
+                  },
+                },
+              },
+            },
           },
         }),
         this.prisma.branchExpense.findMany({
@@ -240,6 +314,24 @@ export class ProfitabilityService {
       ]),
     );
     const timeline = new Map<string, FinancialTotals>();
+    const productMap = new Map<number, ProductAccumulator>();
+    const getProduct = (productId: number, productName: string) => {
+      const current = productMap.get(productId);
+      if (current) return current;
+      const created: ProductAccumulator = {
+        productId,
+        productName,
+        quantitySold: 0,
+        grossRevenue: 0,
+        refunds: 0,
+        cogs: 0,
+        orderIds: new Set<number>(),
+        costSources: new Set<ProductCostSource>(),
+        ingredients: new Map<string, ProductIngredientAccumulator>(),
+      };
+      productMap.set(productId, created);
+      return created;
+    };
     for (
       let cursor = calendarStart;
       cursor < calendarEndExclusive;
@@ -312,6 +404,90 @@ export class ProfitabilityService {
       const refundedAmount = number(order.refund?.amount);
       const netRevenueAfterRefund = grossRevenue - refundedAmount;
       const grossProfitAfterRefund = netRevenueAfterRefund - cogs;
+      const costSource: ProductCostSource = hasLotAllocations
+        ? 'LOT'
+        : hasEstimatedCost
+          ? 'ESTIMATED'
+          : 'MISSING';
+      const productCostSource: ProductCostSource =
+        unpricedAllocations > 0 ? 'MISSING' : costSource;
+      const itemWeights = order.items.map((item) => number(item.lineTotal));
+      const productRevenue = Math.max(
+        0,
+        grossRevenue - number(order.deliveryFee),
+      );
+      const itemRevenueShares = allocateAmount(productRevenue, itemWeights);
+      const actualCostByIngredient = new Map<
+        number,
+        { quantity: number; costAmount: number }
+      >();
+      for (const allocation of order.ingredientLotAllocations) {
+        const ingredientId = allocation.reservation.ingredientId;
+        const current = actualCostByIngredient.get(ingredientId) ?? {
+          quantity: 0,
+          costAmount: 0,
+        };
+        current.quantity += number(allocation.quantity);
+        current.costAmount += number(allocation.costAmount);
+        actualCostByIngredient.set(ingredientId, current);
+      }
+      const ingredientDetails = order.items.map((item) =>
+        item.recipeIngredients.map((recipe) => {
+          const ingredientId = recipe.ingredientId;
+          const actual = ingredientId
+            ? actualCostByIngredient.get(ingredientId)
+            : undefined;
+          const unitCost = actual?.quantity
+            ? actual.costAmount / actual.quantity
+            : ingredientId
+              ? (latestUnitCost.get(`${order.branchId}:${ingredientId}`) ?? 0)
+              : 0;
+          const quantity = number(recipe.totalQuantity);
+          return {
+            ingredientId,
+            ingredientName: recipe.ingredientName,
+            unit: recipe.unit,
+            quantity,
+            costAmount: quantity * unitCost,
+          };
+        }),
+      );
+      const rawItemCosts = ingredientDetails.map((details) =>
+        details.reduce((total, detail) => total + detail.costAmount, 0),
+      );
+      const rawCostTotal = rawItemCosts.reduce(
+        (total, cost) => total + cost,
+        0,
+      );
+      const itemCostShares = allocateAmount(
+        cogs,
+        rawCostTotal > 0 ? rawItemCosts : itemWeights,
+      );
+
+      order.items.forEach((item, index) => {
+        const product = getProduct(item.productId, item.productName);
+        product.quantitySold += item.quantity;
+        product.grossRevenue += itemRevenueShares[index] ?? 0;
+        product.cogs += itemCostShares[index] ?? 0;
+        product.orderIds.add(order.id);
+        product.costSources.add(productCostSource);
+        const scale = rawItemCosts[index]
+          ? (itemCostShares[index] ?? 0) / rawItemCosts[index]
+          : 0;
+        for (const detail of ingredientDetails[index]) {
+          const key = `${detail.ingredientId ?? 'snapshot'}:${detail.ingredientName}:${detail.unit}`;
+          const current = product.ingredients.get(key) ?? {
+            ingredientId: detail.ingredientId,
+            ingredientName: detail.ingredientName,
+            unit: detail.unit,
+            quantity: 0,
+            costAmount: 0,
+          };
+          current.quantity += detail.quantity;
+          current.costAmount += detail.costAmount * scale;
+          product.ingredients.set(key, current);
+        }
+      });
       return {
         orderId: order.id,
         branchId: order.branchId,
@@ -331,11 +507,7 @@ export class ProfitabilityService {
           netRevenueAfterRefund,
         ),
         unpricedAllocations,
-        costSource: hasLotAllocations
-          ? ('LOT' as const)
-          : hasEstimatedCost
-            ? ('ESTIMATED' as const)
-            : ('MISSING' as const),
+        costSource,
       };
     });
 
@@ -349,6 +521,18 @@ export class ProfitabilityService {
       }
       const day = timeline.get(vietnamDateFormatter.format(refund.processedAt));
       if (day) day.refunds += amount;
+      const itemWeights = refund.order.items.map((item) =>
+        number(item.lineTotal),
+      );
+      const productRefund = Math.max(
+        0,
+        amount - number(refund.order.deliveryFee),
+      );
+      const refundShares = allocateAmount(productRefund, itemWeights);
+      refund.order.items.forEach((item, index) => {
+        const product = getProduct(item.productId, item.productName);
+        product.refunds += refundShares[index] ?? 0;
+      });
     }
 
     for (const expense of expenses) {
@@ -398,6 +582,8 @@ export class ProfitabilityService {
         cogs: 'Giá lô đã chụp của từng nguyên liệu dùng cho đơn đã thanh toán',
         expenses: 'Ngày phát sinh khoản chi đã được Admin duyệt',
         payroll: 'Ngày cuối kỳ lương đã chốt hoặc đã thanh toán',
+        productRevenue:
+          'Tiền món sau giảm giá, không gồm phí giao hàng; hoàn tiền được phân bổ theo giá trị từng món',
       },
       summary: {
         ...finalizeFinancials(summary),
@@ -416,6 +602,63 @@ export class ProfitabilityService {
         date,
         ...finalizeFinancials(financials),
       })),
+      products: Array.from(productMap.values())
+        .map((product) => {
+          const grossRevenue = round(product.grossRevenue);
+          const refunds = round(product.refunds);
+          const netRevenue = round(grossRevenue - refunds);
+          const cogs = round(product.cogs);
+          const grossProfit = round(netRevenue - cogs);
+          const grossMarginPercent = margin(grossProfit, netRevenue);
+          const costSource = product.costSources.has('MISSING')
+            ? ('MISSING' as const)
+            : product.costSources.has('LOT') &&
+                product.costSources.has('ESTIMATED')
+              ? ('MIXED' as const)
+              : product.costSources.has('ESTIMATED')
+                ? ('ESTIMATED' as const)
+                : product.costSources.has('LOT')
+                  ? ('LOT' as const)
+                  : ('MISSING' as const);
+          const status =
+            costSource === 'MISSING'
+              ? ('MISSING_COST' as const)
+              : grossProfit < 0
+                ? ('LOSS' as const)
+                : grossMarginPercent < LOW_MARGIN_PERCENT
+                  ? ('LOW_MARGIN' as const)
+                  : ('HEALTHY' as const);
+          return {
+            productId: product.productId,
+            productName: product.productName,
+            quantitySold: product.quantitySold,
+            orderCount: product.orderIds.size,
+            grossRevenue,
+            refunds,
+            netRevenue,
+            cogs,
+            grossProfit,
+            grossMarginPercent,
+            averageSellingPrice:
+              product.quantitySold > 0
+                ? round(netRevenue / product.quantitySold)
+                : 0,
+            averageUnitCost:
+              product.quantitySold > 0 ? round(cogs / product.quantitySold) : 0,
+            costSource,
+            status,
+            ingredients: Array.from(product.ingredients.values())
+              .map((ingredient) => ({
+                ...ingredient,
+                quantity: round(ingredient.quantity),
+                costAmount: round(ingredient.costAmount),
+                costSharePercent:
+                  cogs > 0 ? round((ingredient.costAmount / cogs) * 100) : 0,
+              }))
+              .sort((left, right) => right.costAmount - left.costAmount),
+          };
+        })
+        .sort((left, right) => right.grossProfit - left.grossProfit),
       orders: orderRows,
     };
   }

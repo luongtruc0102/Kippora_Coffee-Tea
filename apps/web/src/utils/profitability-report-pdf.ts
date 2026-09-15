@@ -160,6 +160,53 @@ export function buildProfitabilityReportPdf(
   });
 
   y += 5;
+  sectionTitle(`LỢI NHUẬN TỪNG MÓN (${report.products.length})`);
+  const productWidths = [48, 16, 32, 31, 33, 26];
+  const productHeaders = ["Món", "Đã bán", "DTT", "Giá vốn", "Lãi gộp", "Biên"];
+  function productHeader() {
+    doc.setFillColor("#4A2C20");
+    doc.rect(margin, y, width - margin * 2, 8, "F");
+    let headerX = margin;
+    productHeaders.forEach((header, index) => {
+      doc.setTextColor("#FFFFFF");
+      doc.setFontSize(7);
+      doc.text(header, headerX + 2, y + 5);
+      headerX += productWidths[index];
+    });
+    y += 8;
+  }
+  productHeader();
+  report.products.forEach((product, index) => {
+    if (y + 8 > bottom) {
+      nextPage();
+      productHeader();
+    }
+    if (index % 2) {
+      doc.setFillColor("#FAF6F1");
+      doc.rect(margin, y, width - margin * 2, 8, "F");
+    }
+    const values = [
+      product.productName,
+      String(product.quantitySold),
+      money(product.netRevenue),
+      money(product.cogs),
+      money(product.grossProfit),
+      `${product.grossMarginPercent}%`,
+    ];
+    let rowX = margin;
+    values.forEach((value, column) => {
+      const warning =
+        (column === 4 && product.grossProfit < 0) ||
+        (column === 5 && product.grossMarginPercent < 30);
+      doc.setTextColor(warning ? "#B13C3C" : "#2A211D");
+      doc.setFontSize(6.8);
+      doc.text(doc.splitTextToSize(value, productWidths[column] - 3)[0], rowX + 2, y + 5);
+      rowX += productWidths[column];
+    });
+    y += 8;
+  });
+
+  y += 5;
   sectionTitle(`CHI TIẾT ĐƠN ĐÃ THU (${report.orders.length})`);
   const orderWidths = [17, 20, 29, 32, 29, 29, 28];
   const orderHeaders = ["Đơn", "CN", "Ngày thu", "Doanh thu", "Giá vốn", "Lãi", "Biên"];

@@ -4,17 +4,20 @@ import {
   AlertTriangle,
   BarChart3,
   CalendarDays,
+  ChevronDown,
+  ChevronUp,
   Download,
   FileSpreadsheet,
   LoaderCircle,
   PackageSearch,
   RefreshCw,
   RotateCcw,
+  Search,
   TrendingDown,
   TrendingUp,
   WalletCards,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import {
   Bar,
   CartesianGrid,
@@ -51,6 +54,8 @@ function daysAgo(days: number) {
 }
 
 type DatePreset = "TODAY" | "7D" | "MONTH";
+type ProductStatusFilter = "ALL" | "ATTENTION" | "HEALTHY";
+type ProductSort = "PROFIT" | "QUANTITY" | "MARGIN";
 
 const currency = new Intl.NumberFormat("vi-VN", {
   style: "currency",
@@ -72,6 +77,24 @@ function compactMoney(value: number) {
 function displayDate(value: string) {
   return value.split("-").reverse().join("/");
 }
+
+function ingredientUnit(unit: string) {
+  return unit === "GRAM" ? "g" : unit === "MILLILITER" ? "ml" : unit === "PIECE" ? "cái" : unit;
+}
+
+const productStatus = {
+  HEALTHY: { label: "Lãi tốt", className: "bg-emerald-50 text-emerald-700" },
+  LOW_MARGIN: { label: "Lãi thấp", className: "bg-amber-50 text-amber-700" },
+  LOSS: { label: "Đang lỗ", className: "bg-red-50 text-red-700" },
+  MISSING_COST: { label: "Thiếu giá vốn", className: "bg-slate-100 text-slate-600" },
+} as const;
+
+const productCostSource = {
+  LOT: "Theo lô thực tế",
+  ESTIMATED: "Giá lô ước tính",
+  MIXED: "Kết hợp thực tế và ước tính",
+  MISSING: "Chưa đủ dữ liệu giá vốn",
+} as const;
 
 type MetricCardProps = {
   label: string;
@@ -116,6 +139,10 @@ export default function ProfitabilityPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [exporting, setExporting] = useState<"pdf" | "excel" | null>(null);
+  const [productSearch, setProductSearch] = useState("");
+  const [productStatusFilter, setProductStatusFilter] = useState<ProductStatusFilter>("ALL");
+  const [productSort, setProductSort] = useState<ProductSort>("PROFIT");
+  const [expandedProductId, setExpandedProductId] = useState<number | null>(null);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     const accessToken = sessionStorage.getItem("accessToken");
@@ -175,6 +202,35 @@ export default function ProfitabilityPage() {
       report.dataQuality.pendingPayrollPeriods +
       report.dataQuality.estimatedCostOrders
     : 0;
+
+  const productAlertCount = report
+    ? report.products.filter((product) => product.status !== "HEALTHY").length
+    : 0;
+
+  const visibleProducts = useMemo(() => {
+    if (!report) return [];
+    const normalizedSearch = productSearch.trim().toLocaleLowerCase("vi");
+    return report.products
+      .filter((product) =>
+        normalizedSearch
+          ? product.productName.toLocaleLowerCase("vi").includes(normalizedSearch)
+          : true,
+      )
+      .filter((product) =>
+        productStatusFilter === "ALL"
+          ? true
+          : productStatusFilter === "HEALTHY"
+            ? product.status === "HEALTHY"
+            : product.status !== "HEALTHY",
+      )
+      .sort((left, right) =>
+        productSort === "QUANTITY"
+          ? right.quantitySold - left.quantitySold
+          : productSort === "MARGIN"
+            ? left.grossMarginPercent - right.grossMarginPercent
+            : right.grossProfit - left.grossProfit,
+      );
+  }, [productSearch, productSort, productStatusFilter, report]);
 
   function setRange(range: DatePreset) {
     const today = dateInput();
@@ -309,6 +365,165 @@ export default function ProfitabilityPage() {
                   <Line type="monotone" dataKey="netProfit" name="Lợi nhuận ròng" stroke="#4A2C20" strokeWidth={2.5} dot={false} />
                 </ComposedChart>
               </ResponsiveContainer>
+            </div>
+          </section>
+
+          <section className="overflow-hidden rounded-2xl border border-[#E9DED3] bg-white shadow-sm">
+            <div className="border-b border-[#EEE4DA] p-5">
+              <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-lg font-bold text-[#2A211D]">Lợi nhuận từng món</h2>
+                    <span className="rounded-full bg-[#F6EFE8] px-3 py-1 text-xs font-semibold text-[#7A513B]">
+                      {report.products.length} món
+                    </span>
+                    {productAlertCount > 0 ? (
+                      <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+                        {productAlertCount} món cần xem lại
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-1 text-sm text-[#78866B]">
+                    Doanh thu món đã trừ giảm giá và hoàn tiền, không tính phí giao hàng. Biên dưới 30% được cảnh báo.
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <label className="flex h-10 min-w-56 items-center gap-2 rounded-xl border border-[#E4D5C8] bg-white px-3 text-sm text-[#756C64] focus-within:border-[#C2763D]">
+                    <Search size={16} />
+                    <input
+                      value={productSearch}
+                      onChange={(event) => setProductSearch(event.target.value)}
+                      placeholder="Tìm tên món..."
+                      className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-[#A69B92]"
+                    />
+                  </label>
+                  <select
+                    value={productStatusFilter}
+                    onChange={(event) => setProductStatusFilter(event.target.value as ProductStatusFilter)}
+                    className="h-10 rounded-xl border border-[#E4D5C8] bg-white px-3 text-sm text-[#5E5047] outline-none focus:border-[#C2763D]"
+                    aria-label="Lọc tình trạng lợi nhuận món"
+                  >
+                    <option value="ALL">Tất cả tình trạng</option>
+                    <option value="ATTENTION">Cần xem lại</option>
+                    <option value="HEALTHY">Lãi tốt</option>
+                  </select>
+                  <select
+                    value={productSort}
+                    onChange={(event) => setProductSort(event.target.value as ProductSort)}
+                    className="h-10 rounded-xl border border-[#E4D5C8] bg-white px-3 text-sm text-[#5E5047] outline-none focus:border-[#C2763D]"
+                    aria-label="Sắp xếp lợi nhuận món"
+                  >
+                    <option value="PROFIT">Lãi cao nhất</option>
+                    <option value="QUANTITY">Bán nhiều nhất</option>
+                    <option value="MARGIN">Biên thấp nhất</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1080px] text-left text-sm">
+                <thead className="bg-[#FBF8F5] text-xs uppercase tracking-wide text-[#78866B]">
+                  <tr>
+                    <th className="px-5 py-4">Món</th>
+                    <th className="px-4 py-4 text-right">Đã bán</th>
+                    <th className="px-4 py-4 text-right">Doanh thu thuần</th>
+                    <th className="px-4 py-4 text-right">Giá vốn</th>
+                    <th className="px-4 py-4 text-right">Lãi gộp</th>
+                    <th className="px-4 py-4">Biên lãi</th>
+                    <th className="px-4 py-4 text-center">Đánh giá</th>
+                    <th className="px-5 py-4 text-right">Chi tiết</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#F0E7DF]">
+                  {visibleProducts.map((product) => {
+                    const status = productStatus[product.status];
+                    const expanded = expandedProductId === product.productId;
+                    const marginWidth = Math.max(0, Math.min(100, product.grossMarginPercent));
+                    return (
+                      <Fragment key={product.productId}>
+                        <tr className="hover:bg-[#FFFCF9]">
+                          <td className="px-5 py-4">
+                            <p className="font-semibold text-[#2A211D]">{product.productName}</p>
+                            <p className="mt-1 text-xs text-[#8A7E74]">{product.orderCount} đơn · TB bán {money(product.averageSellingPrice)}/ly</p>
+                          </td>
+                          <td className="px-4 py-4 text-right font-semibold text-[#2A211D]">{product.quantitySold}</td>
+                          <td className="px-4 py-4 text-right font-medium text-[#2A211D]">
+                            {money(product.netRevenue)}
+                            {product.refunds > 0 ? <p className="mt-1 text-xs font-normal text-red-600">Hoàn -{money(product.refunds)}</p> : null}
+                          </td>
+                          <td className="px-4 py-4 text-right text-[#5E5047]">
+                            {money(product.cogs)}
+                            <p className="mt-1 text-xs text-[#8A7E74]">TB {money(product.averageUnitCost)}/ly</p>
+                          </td>
+                          <td className={`px-4 py-4 text-right font-bold ${product.grossProfit >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+                            {money(product.grossProfit)}
+                          </td>
+                          <td className="px-4 py-4">
+                            <div className="flex items-center justify-between gap-3">
+                              <span className={`font-semibold ${product.grossMarginPercent < 30 ? "text-amber-700" : "text-emerald-700"}`}>{product.grossMarginPercent}%</span>
+                              <span className="h-1.5 w-20 overflow-hidden rounded-full bg-[#EEE6DE]">
+                                <span className={`block h-full rounded-full ${product.grossMarginPercent < 30 ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${marginWidth}%` }} />
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 text-center">
+                            <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${status.className}`}>{status.label}</span>
+                          </td>
+                          <td className="px-5 py-4 text-right">
+                            <button
+                              type="button"
+                              onClick={() => setExpandedProductId(expanded ? null : product.productId)}
+                              className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-semibold text-[#8B5A3C] hover:bg-[#F7EEE6]"
+                              aria-expanded={expanded}
+                            >
+                              Nguyên liệu {expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                            </button>
+                          </td>
+                        </tr>
+                        {expanded ? (
+                          <tr className="bg-[#FCF9F6]">
+                            <td colSpan={8} className="px-5 py-5">
+                              <div className="flex flex-col gap-4">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <p className="text-sm font-semibold text-[#4A2C20]">Các nguyên liệu tạo nên giá vốn</p>
+                                  <span className={`rounded-full px-3 py-1 text-xs font-medium ${product.costSource === "LOT" ? "bg-emerald-50 text-emerald-700" : product.costSource === "MISSING" ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-700"}`}>
+                                    {productCostSource[product.costSource]}
+                                  </span>
+                                </div>
+                                {product.ingredients.length ? (
+                                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                                    {product.ingredients.map((ingredient) => (
+                                      <div key={`${ingredient.ingredientId ?? "snapshot"}-${ingredient.ingredientName}-${ingredient.unit}`} className="rounded-xl border border-[#E9DED3] bg-white p-3">
+                                        <div className="flex items-start justify-between gap-3">
+                                          <div>
+                                            <p className="font-medium text-[#2A211D]">{ingredient.ingredientName}</p>
+                                            <p className="mt-1 text-xs text-[#8A7E74]">Đã dùng {new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 3 }).format(ingredient.quantity)} {ingredientUnit(ingredient.unit)}</p>
+                                          </div>
+                                          <div className="text-right">
+                                            <p className="font-semibold text-[#4A2C20]">{money(ingredient.costAmount)}</p>
+                                            <p className="mt-1 text-xs text-[#8A7E74]">{ingredient.costSharePercent}% giá vốn</p>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <p className="rounded-xl border border-dashed border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                                    Đơn cũ chưa có bản chụp công thức theo món nên chưa thể tách chi tiết từng nguyên liệu.
+                                  </p>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ) : null}
+                      </Fragment>
+                    );
+                  })}
+                  {!visibleProducts.length ? (
+                    <tr><td colSpan={8} className="px-5 py-12 text-center text-[#8A7E74]">Không có món phù hợp với bộ lọc.</td></tr>
+                  ) : null}
+                </tbody>
+              </table>
             </div>
           </section>
 

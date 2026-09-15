@@ -43,6 +43,33 @@ export type ProfitabilityTimelineItem = ProfitabilityFinancials & {
   date: string;
 };
 
+export type ProfitabilityProductIngredient = {
+  ingredientId: number | null;
+  ingredientName: string;
+  unit: string;
+  quantity: number;
+  costAmount: number;
+  costSharePercent: number;
+};
+
+export type ProfitabilityProduct = {
+  productId: number;
+  productName: string;
+  quantitySold: number;
+  orderCount: number;
+  grossRevenue: number;
+  refunds: number;
+  netRevenue: number;
+  cogs: number;
+  grossProfit: number;
+  grossMarginPercent: number;
+  averageSellingPrice: number;
+  averageUnitCost: number;
+  costSource: "LOT" | "ESTIMATED" | "MIXED" | "MISSING";
+  status: "HEALTHY" | "LOW_MARGIN" | "LOSS" | "MISSING_COST";
+  ingredients: ProfitabilityProductIngredient[];
+};
+
 export type ProfitabilityReport = {
   filters: { from: string; to: string; branchId: number | null };
   generatedAt: string;
@@ -52,6 +79,7 @@ export type ProfitabilityReport = {
     cogs: string;
     expenses: string;
     payroll: string;
+    productRevenue: string;
   };
   summary: ProfitabilityFinancials & {
     paidOrders: number;
@@ -65,5 +93,6 @@ export type ProfitabilityReport = {
   };
   branches: ProfitabilityBranch[];
   timeline: ProfitabilityTimelineItem[];
+  products: ProfitabilityProduct[];
   orders: ProfitabilityOrder[];
 };
