@@ -1,4 +1,11 @@
-import { IsEnum, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import {
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  IsString,
+  MaxLength,
+  Min,
+} from 'class-validator';
 import { InventoryVarianceReason } from '../../../generated/prisma/enums';
 
 export class DisposeInventoryLotDto {

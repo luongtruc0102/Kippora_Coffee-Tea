@@ -218,7 +218,11 @@ export class DashboardRevenueService {
     const firstMonthIndex = startYear * 12 + startMonth - 1;
     const lastMonthIndex = endYear * 12 + endMonth - 1;
 
-    for (let monthIndex = firstMonthIndex; monthIndex <= lastMonthIndex; monthIndex++) {
+    for (
+      let monthIndex = firstMonthIndex;
+      monthIndex <= lastMonthIndex;
+      monthIndex++
+    ) {
       const year = Math.floor(monthIndex / 12);
       const month = (monthIndex % 12) + 1;
       const key = `${year}-${String(month).padStart(2, '0')}`;

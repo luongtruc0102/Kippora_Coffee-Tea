@@ -64,11 +64,7 @@ export class InventoryController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateRecipeDto,
   ) {
-    return this.inventoryService.updateVariantRecipe(
-      id,
-      dto,
-      request.user.sub,
-    );
+    return this.inventoryService.updateVariantRecipe(id, dto, request.user.sub);
   }
 
   @Roles('ADMIN')
@@ -78,11 +74,7 @@ export class InventoryController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateRecipeDto,
   ) {
-    return this.inventoryService.updateToppingRecipe(
-      id,
-      dto,
-      request.user.sub,
-    );
+    return this.inventoryService.updateToppingRecipe(id, dto, request.user.sub);
   }
 
   @Roles('ADMIN', 'BRANCH_MANAGER')

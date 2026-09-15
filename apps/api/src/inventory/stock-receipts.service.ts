@@ -440,11 +440,16 @@ export class StockReceiptsService {
       throw new BadRequestException('Hạn dùng phải sau ngày sản xuất');
     }
     if (item.manufacturedAt && receivedAt && item.manufacturedAt > receivedAt) {
-      throw new BadRequestException('Ngày sản xuất không được sau ngày nhận hàng');
+      throw new BadRequestException(
+        'Ngày sản xuất không được sau ngày nhận hàng',
+      );
     }
     if (item.expiresAt) {
       const todayKey = new Intl.DateTimeFormat('en-CA', {
-        timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit',
+        timeZone: 'Asia/Ho_Chi_Minh',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
       }).format(new Date());
       if (item.expiresAt < new Date(`${todayKey}T00:00:00+07:00`)) {
         throw new BadRequestException('Không thể nhập lô đã hết hạn');

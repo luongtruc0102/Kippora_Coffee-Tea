@@ -30,6 +30,7 @@ import { PayrollModule } from './payroll/payroll.module';
 import { AuditLogsModule } from './audit-logs/audit-logs.module';
 import { ExpensesModule } from './expenses/expenses.module';
 import { CashSessionsModule } from './cash-sessions/cash-sessions.module';
+import { ProfitabilityModule } from './profitability/profitability.module';
 
 @Module({
   imports: [
@@ -113,6 +114,9 @@ import { CashSessionsModule } from './cash-sessions/cash-sessions.module';
 
     // Đối soát tiền mặt theo ngày, trưởng chi nhánh đóng và Admin khóa sổ.
     CashSessionsModule,
+
+    // Giá vốn theo lô và báo cáo lợi nhuận thực tế dành cho Admin.
+    ProfitabilityModule,
   ],
 
   providers: [

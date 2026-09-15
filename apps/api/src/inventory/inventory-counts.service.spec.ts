@@ -195,7 +195,9 @@ describe('InventoryCountsService', () => {
           reservedQuantity: 10,
         }),
       },
-      inventoryMovement: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      inventoryMovement: {
+        createMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
       notification: { create: jest.fn().mockResolvedValue({}) },
     };
     const prisma = {
@@ -217,13 +219,15 @@ describe('InventoryCountsService', () => {
       data: { quantity: { increment: -5 } },
     });
     expect(transaction.inventoryMovement.createMany).toHaveBeenCalledWith({
-      data: [expect.objectContaining({
-        inventoryCountId: 12,
-        lotId: 44,
-        type: 'ADJUST',
-        quantityDelta: -5,
-        quantityAfter: 85,
-      })],
+      data: [
+        expect.objectContaining({
+          inventoryCountId: 12,
+          lotId: 44,
+          type: 'ADJUST',
+          quantityDelta: -5,
+          quantityAfter: 85,
+        }),
+      ],
     });
     expect(inventory.syncLowStockNotification).toHaveBeenCalledWith(
       transaction,

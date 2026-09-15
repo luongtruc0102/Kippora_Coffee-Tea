@@ -198,9 +198,7 @@ export class StaffSchedulesService {
         staff.role.name !== 'STAFF' ||
         !staff.staffProfile?.branch
       ) {
-        throw new ForbiddenException(
-          'Nhân viên chưa được phân công chi nhánh',
-        );
+        throw new ForbiddenException('Nhân viên chưa được phân công chi nhánh');
       }
       return staff.staffProfile.branch;
     }
@@ -566,8 +564,7 @@ export class StaffSchedulesService {
       actorId: adminUserId,
       branchId: current.branchId,
       module: 'ATTENDANCE',
-      action:
-        dto.action === 'APPROVE' ? 'APPROVE_PERIOD' : 'RETURN_PERIOD',
+      action: dto.action === 'APPROVE' ? 'APPROVE_PERIOD' : 'RETURN_PERIOD',
       entityType: 'StaffAttendancePeriod',
       entityId: current.id,
       description:
@@ -1154,9 +1151,7 @@ export class StaffSchedulesService {
       this.prisma.staffShift.findMany({
         where: {
           branchId: branch.id,
-          ...(personalEmployeeId
-            ? { employeeId: personalEmployeeId }
-            : {}),
+          ...(personalEmployeeId ? { employeeId: personalEmployeeId } : {}),
           startAt: { gte: range.start, lt: range.end },
         },
         select: {
@@ -1208,9 +1203,7 @@ export class StaffSchedulesService {
       this.prisma.staffAttendance.findMany({
         where: {
           branchId: branch.id,
-          ...(personalEmployeeId
-            ? { employeeId: personalEmployeeId }
-            : {}),
+          ...(personalEmployeeId ? { employeeId: personalEmployeeId } : {}),
           scheduledShiftId: null,
           clockIn: { gte: range.start, lt: range.end },
         },

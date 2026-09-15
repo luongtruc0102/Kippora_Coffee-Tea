@@ -14,12 +14,8 @@ export class DashboardOverviewService {
     from?: string,
     to?: string,
   ) {
-    const {
-      startDate,
-      endDate,
-      previousStartDate,
-      previousEndDate,
-    } = getDashboardPeriodRange(period, from, to);
+    const { startDate, endDate, previousStartDate, previousEndDate } =
+      getDashboardPeriodRange(period, from, to);
     const orderBranchFilter = branchId ? { branchId } : {};
 
     const [
@@ -77,9 +73,7 @@ export class DashboardOverviewService {
             gte: startDate,
             lte: endDate,
           },
-          ...(branchId
-            ? { orders: { some: { branchId } } }
-            : {}),
+          ...(branchId ? { orders: { some: { branchId } } } : {}),
         },
       }),
 
@@ -253,9 +247,7 @@ export class DashboardOverviewService {
         ? previousRevenueValue / previousCompletedOrders
         : 0;
     const previousCancellationRate =
-      previousOrders > 0
-        ? (previousCancelledOrders / previousOrders) * 100
-        : 0;
+      previousOrders > 0 ? (previousCancelledOrders / previousOrders) * 100 : 0;
 
     const percentageChange = (current: number, previous: number) => {
       if (previous === 0) return current === 0 ? 0 : null;
@@ -281,9 +273,7 @@ export class DashboardOverviewService {
       if (workedEnd <= workedStart) return total;
 
       const shiftEnd = attendance.scheduledShift?.endAt.getTime();
-      const regularEnd = shiftEnd
-        ? Math.min(workedEnd, shiftEnd)
-        : workedEnd;
+      const regularEnd = shiftEnd ? Math.min(workedEnd, shiftEnd) : workedEnd;
       const regularSeconds = Math.max(0, regularEnd - workedStart) / 1000;
       const overtimeStart = shiftEnd
         ? Math.max(workedStart, shiftEnd)
@@ -337,10 +327,7 @@ export class DashboardOverviewService {
       comparison: {
         previousStartDate,
         previousEndDate,
-        revenueChangePercent: percentageChange(
-          revenue,
-          previousRevenueValue,
-        ),
+        revenueChangePercent: percentageChange(revenue, previousRevenueValue),
         orderChangePercent: percentageChange(periodOrders, previousOrders),
         newCustomerChangePercent: percentageChange(
           newCustomers,

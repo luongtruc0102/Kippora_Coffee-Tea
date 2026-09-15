@@ -161,7 +161,10 @@ export class PurchaseOrdersService {
         ? await this.prisma.storeBranch.findMany({ orderBy: { code: 'asc' } })
         : [branch];
     const todayKey = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit',
+      timeZone: 'Asia/Ho_Chi_Minh',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
     }).format(new Date());
     const today = new Date(`${todayKey}T00:00:00+07:00`);
     return {
@@ -877,10 +880,15 @@ export class PurchaseOrdersService {
       throw new BadRequestException('Hạn dùng phải sau ngày sản xuất');
     }
     if (manufacturedAt && manufacturedAt > receivedAt) {
-      throw new BadRequestException('Ngày sản xuất không được sau ngày nhận hàng');
+      throw new BadRequestException(
+        'Ngày sản xuất không được sau ngày nhận hàng',
+      );
     }
     const todayKey = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit',
+      timeZone: 'Asia/Ho_Chi_Minh',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
     }).format(new Date());
     if (expiresAt && expiresAt < new Date(`${todayKey}T00:00:00+07:00`)) {
       throw new BadRequestException('Không thể nhập lô đã hết hạn');

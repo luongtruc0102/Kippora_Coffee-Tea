@@ -66,8 +66,11 @@ export default function InventoryLotsPage({ mode }: Props) {
 
   useEffect(() => {
     const controller = new AbortController();
-    void load(controller.signal);
-    return () => controller.abort();
+    const timeoutId = window.setTimeout(() => void load(controller.signal), 0);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeoutId);
+    };
   }, [load]);
 
   async function openDetail(lot: InventoryLot) {

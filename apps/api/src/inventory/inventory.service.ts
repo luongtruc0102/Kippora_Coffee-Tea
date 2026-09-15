@@ -498,12 +498,16 @@ export class InventoryService {
     });
     if (!reservations.length) return;
     for (const reservation of reservations) {
-      const claimedReservation = await tx.orderIngredientReservation.updateMany({
-        where: { id: reservation.id, state: 'RESERVED' },
-        data: { state: 'CONSUMED' },
-      });
+      const claimedReservation = await tx.orderIngredientReservation.updateMany(
+        {
+          where: { id: reservation.id, state: 'RESERVED' },
+          data: { state: 'CONSUMED' },
+        },
+      );
       if (claimedReservation.count !== 1) {
-        throw new BadRequestException('Đơn vừa được xử lý kho, vui lòng tải lại');
+        throw new BadRequestException(
+          'Đơn vừa được xử lý kho, vui lòng tải lại',
+        );
       }
       const quantity = this.number(reservation.quantity);
       const allocated = reservation.lotAllocations.reduce(
@@ -511,7 +515,9 @@ export class InventoryService {
         0,
       );
       if (Math.abs(allocated - quantity) > 0.0005) {
-        throw new BadRequestException('Dữ liệu phân bổ lô của đơn không hợp lệ');
+        throw new BadRequestException(
+          'Dữ liệu phân bổ lô của đơn không hợp lệ',
+        );
       }
       const changed = await tx.inventoryStock.updateMany({
         where: {
@@ -556,7 +562,9 @@ export class InventoryService {
           },
         });
         if (lotChanged.count !== 1) {
-          throw new BadRequestException('Số dư lô không còn khớp với lượng đã giữ');
+          throw new BadRequestException(
+            'Số dư lô không còn khớp với lượng đã giữ',
+          );
         }
         await tx.orderIngredientLotAllocation.update({
           where: { id: allocation.id },
@@ -597,12 +605,16 @@ export class InventoryService {
       include: { lotAllocations: { where: { state: 'RESERVED' } } },
     });
     for (const reservation of reservations) {
-      const claimedReservation = await tx.orderIngredientReservation.updateMany({
-        where: { id: reservation.id, state: 'RESERVED' },
-        data: { state: 'RELEASED' },
-      });
+      const claimedReservation = await tx.orderIngredientReservation.updateMany(
+        {
+          where: { id: reservation.id, state: 'RESERVED' },
+          data: { state: 'RELEASED' },
+        },
+      );
       if (claimedReservation.count !== 1) {
-        throw new BadRequestException('Đơn vừa được xử lý kho, vui lòng tải lại');
+        throw new BadRequestException(
+          'Đơn vừa được xử lý kho, vui lòng tải lại',
+        );
       }
       const quantity = this.number(reservation.quantity);
       const changed = await tx.inventoryStock.updateMany({
@@ -626,21 +638,28 @@ export class InventoryService {
         },
       });
       const allocated = reservation.lotAllocations.reduce(
-        (sum, item) => sum + this.number(item.quantity), 0,
+        (sum, item) => sum + this.number(item.quantity),
+        0,
       );
       if (Math.abs(allocated - quantity) > 0.0005) {
-        throw new BadRequestException('Dữ liệu phân bổ lô của đơn không hợp lệ');
+        throw new BadRequestException(
+          'Dữ liệu phân bổ lô của đơn không hợp lệ',
+        );
       }
       for (const allocation of reservation.lotAllocations) {
-        const lot = await tx.inventoryLot.findUniqueOrThrow({ where: { id: allocation.lotId } });
+        const lot = await tx.inventoryLot.findUniqueOrThrow({
+          where: { id: allocation.lotId },
+        });
         const lotQuantity = this.number(allocation.quantity);
         const lotChanged = await tx.inventoryLot.updateMany({
           where: { id: lot.id, reservedQuantity: { gte: lotQuantity } },
           data: { reservedQuantity: { decrement: lotQuantity } },
         });
-        if (lotChanged.count !== 1) throw new BadRequestException('Không thể hoàn lượng giữ của lô');
+        if (lotChanged.count !== 1)
+          throw new BadRequestException('Không thể hoàn lượng giữ của lô');
         await tx.orderIngredientLotAllocation.update({
-          where: { id: allocation.id }, data: { state: 'RELEASED' },
+          where: { id: allocation.id },
+          data: { state: 'RELEASED' },
         });
         await tx.inventoryMovement.create({
           data: {
@@ -675,11 +694,17 @@ export class InventoryService {
     branchId: number,
     ingredientId: number,
     requiredQuantity: number,
-    stock: { quantity: { toString(): string }; reservedQuantity: { toString(): string } },
+    stock: {
+      quantity: { toString(): string };
+      reservedQuantity: { toString(): string };
+    },
     actorId?: number,
   ) {
     const todayKey = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit',
+      timeZone: 'Asia/Ho_Chi_Minh',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
     }).format(new Date());
     const today = new Date(`${todayKey}T00:00:00+07:00`);
     const lots = await tx.inventoryLot.findMany({
@@ -699,15 +724,23 @@ export class InventoryService {
     let remaining = requiredQuantity;
     for (const lot of lots) {
       if (remaining <= 0.0005) break;
-      const available = this.number(lot.quantity) - this.number(lot.reservedQuantity);
+      const available =
+        this.number(lot.quantity) - this.number(lot.reservedQuantity);
       if (available <= 0.0005) continue;
       const quantity = Math.min(remaining, available);
       const claimed = await tx.inventoryLot.updateMany({
-        where: { id: lot.id, quantity: lot.quantity, reservedQuantity: lot.reservedQuantity, status: 'ACTIVE' },
+        where: {
+          id: lot.id,
+          quantity: lot.quantity,
+          reservedQuantity: lot.reservedQuantity,
+          status: 'ACTIVE',
+        },
         data: { reservedQuantity: { increment: quantity } },
       });
       if (claimed.count !== 1) {
-        throw new BadRequestException('Lô nguyên liệu vừa thay đổi, vui lòng đặt lại đơn');
+        throw new BadRequestException(
+          'Lô nguyên liệu vừa thay đổi, vui lòng đặt lại đơn',
+        );
       }
       const unitCost = this.number(lot.unitCost);
       await tx.orderIngredientLotAllocation.create({
@@ -738,7 +771,9 @@ export class InventoryService {
       remaining -= quantity;
     }
     if (remaining > 0.0005) {
-      throw new BadRequestException('Tồn theo lô không đủ hoặc các lô còn lại đã hết hạn');
+      throw new BadRequestException(
+        'Tồn theo lô không đủ hoặc các lô còn lại đã hết hạn',
+      );
     }
   }
 
@@ -782,25 +817,34 @@ export class InventoryService {
     const changes: Array<{ lotId: number; quantityDelta: number }> = [];
     for (const lot of lots) {
       if (remaining <= 0.0005) break;
-      const available = this.number(lot.quantity) - this.number(lot.reservedQuantity);
+      const available =
+        this.number(lot.quantity) - this.number(lot.reservedQuantity);
       if (available <= 0.0005) continue;
       const quantity = Math.min(remaining, available);
       const nextQuantity = this.number(lot.quantity) - quantity;
       const claimed = await tx.inventoryLot.updateMany({
-        where: { id: lot.id, quantity: lot.quantity, reservedQuantity: lot.reservedQuantity },
+        where: {
+          id: lot.id,
+          quantity: lot.quantity,
+          reservedQuantity: lot.reservedQuantity,
+        },
         data: {
           quantity: { decrement: quantity },
           status: nextQuantity <= 0.0005 ? 'DEPLETED' : lot.status,
         },
       });
       if (claimed.count !== 1) {
-        throw new BadRequestException('Lô vừa thay đổi trong lúc duyệt kiểm kê');
+        throw new BadRequestException(
+          'Lô vừa thay đổi trong lúc duyệt kiểm kê',
+        );
       }
       changes.push({ lotId: lot.id, quantityDelta: -quantity });
       remaining -= quantity;
     }
     if (remaining > 0.0005) {
-      throw new BadRequestException('Tổng các lô không đủ để áp dụng phần thiếu kiểm kê');
+      throw new BadRequestException(
+        'Tổng các lô không đủ để áp dụng phần thiếu kiểm kê',
+      );
     }
     return changes;
   }

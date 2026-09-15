@@ -39,11 +39,7 @@ export class AuditLogsService {
     return manager.managedBranch.id;
   }
 
-  async findAll(
-    viewerId: number,
-    viewerRole: string,
-    query: ListAuditLogsDto,
-  ) {
+  async findAll(viewerId: number, viewerRole: string, query: ListAuditLogsDto) {
     const branchId = await this.resolveBranchId(
       viewerId,
       viewerRole,

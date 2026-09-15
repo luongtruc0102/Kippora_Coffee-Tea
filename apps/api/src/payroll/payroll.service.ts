@@ -181,9 +181,7 @@ export class PayrollService {
         staff.role.name !== 'STAFF' ||
         !staff.staffProfile?.branch
       ) {
-        throw new ForbiddenException(
-          'Nhân viên chưa được phân công chi nhánh',
-        );
+        throw new ForbiddenException('Nhân viên chưa được phân công chi nhánh');
       }
       return staff.staffProfile.branch;
     }
@@ -489,9 +487,7 @@ export class PayrollService {
       this.prisma.staffAttendance.findMany({
         where: {
           branchId: branch.id,
-          ...(personalEmployeeId
-            ? { employeeId: personalEmployeeId }
-            : {}),
+          ...(personalEmployeeId ? { employeeId: personalEmployeeId } : {}),
           clockIn: { gte: range.rangeStart, lt: range.rangeEnd },
         },
         select: {
@@ -528,9 +524,7 @@ export class PayrollService {
       this.prisma.staffShift.findMany({
         where: {
           branchId: branch.id,
-          ...(personalEmployeeId
-            ? { employeeId: personalEmployeeId }
-            : {}),
+          ...(personalEmployeeId ? { employeeId: personalEmployeeId } : {}),
           startAt: { gte: range.rangeStart, lt: range.rangeEnd },
         },
         select: {
@@ -792,18 +786,10 @@ export class PayrollService {
       },
       include: payrollPeriodInclude,
     });
-    if (
-      lockedPeriod &&
-      lockedPeriod.status !== StaffPayrollStatus.DRAFT
-    ) {
+    if (lockedPeriod && lockedPeriod.status !== StaffPayrollStatus.DRAFT) {
       return this.serializePeriod(lockedPeriod, staffUserId);
     }
-    return this.generate(
-      staffUserId,
-      'STAFF_SELF',
-      { month },
-      staffUserId,
-    );
+    return this.generate(staffUserId, 'STAFF_SELF', { month }, staffUserId);
   }
 
   async updateRate(
@@ -863,9 +849,7 @@ export class PayrollService {
       description: `Cập nhật mức lương nhân viên #${employee.id}`,
       beforeData: {
         hourlyRate: Number(employee.staffProfile.hourlyRate),
-        overtimeMultiplier: Number(
-          employee.staffProfile.overtimeMultiplier,
-        ),
+        overtimeMultiplier: Number(employee.staffProfile.overtimeMultiplier),
       },
       afterData: result,
     });

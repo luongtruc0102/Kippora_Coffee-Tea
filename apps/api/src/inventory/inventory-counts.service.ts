@@ -385,13 +385,14 @@ export class InventoryCountsService {
             update: { quantity: { increment: difference } },
           });
         }
-        const lotChanges = await this.inventoryService.applyInventoryCountToLots(
-          tx,
-          approved.branchId,
-          item.ingredientId,
-          approved.id,
-          difference,
-        );
+        const lotChanges =
+          await this.inventoryService.applyInventoryCountToLots(
+            tx,
+            approved.branchId,
+            item.ingredientId,
+            approved.id,
+            difference,
+          );
         await tx.inventoryMovement.createMany({
           data: lotChanges.map((change) => ({
             branchId: approved.branchId,

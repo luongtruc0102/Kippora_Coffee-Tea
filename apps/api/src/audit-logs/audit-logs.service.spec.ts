@@ -45,7 +45,9 @@ describe('AuditLogsService', () => {
     });
 
     expect(logFindMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: expect.objectContaining({ branchId: 2 }) }),
+      expect.objectContaining({
+        where: expect.objectContaining({ branchId: 2 }),
+      }),
     );
     expect(result.scopedBranchId).toBe(2);
     expect(branchFindMany).not.toHaveBeenCalled();
@@ -64,7 +66,9 @@ describe('AuditLogsService', () => {
 
     expect(userFindUnique).not.toHaveBeenCalled();
     expect(logFindMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: expect.objectContaining({ branchId: 3 }) }),
+      expect.objectContaining({
+        where: expect.objectContaining({ branchId: 3 }),
+      }),
     );
     expect(result.branches).toHaveLength(1);
   });

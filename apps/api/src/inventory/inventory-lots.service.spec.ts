@@ -49,7 +49,9 @@ describe('InventoryLotsService', () => {
     };
     const prisma = {
       inventoryLot: { findUnique: jest.fn().mockResolvedValue(lot) },
-      $transaction: jest.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
+      $transaction: jest.fn((callback: (client: typeof tx) => unknown) =>
+        callback(tx),
+      ),
     };
     const inventory = {
       getScopedBranch: jest.fn().mockResolvedValue(lot.branch),
@@ -81,13 +83,19 @@ describe('InventoryLotsService', () => {
       note: 'Bao bì rách',
     });
     expect(tx.inventoryLot.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ quantity: { decrement: 3 } }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({ quantity: { decrement: 3 } }),
+      }),
     );
     expect(tx.inventoryStock.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: { quantity: { decrement: 3 } } }),
     );
     expect(tx.inventoryMovement.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ lotId: 8, type: 'ADJUST', quantityDelta: -3 }),
+      data: expect.objectContaining({
+        lotId: 8,
+        type: 'ADJUST',
+        quantityDelta: -3,
+      }),
     });
     expect(inventory.syncLowStockNotification).toHaveBeenCalledWith(tx, 30);
   });
