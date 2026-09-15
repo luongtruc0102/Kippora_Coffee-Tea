@@ -140,7 +140,18 @@ export default function NotificationBell() {
     }
     dismissToast(notification.id);
     setOpen(false);
-    if (["PAYROLL_FINALIZED", "PAYROLL_PAID"].includes(notification.type)) {
+    if (notification.type.startsWith("MONTH_CLOSE_")) {
+      const storedUser = sessionStorage.getItem("user");
+      let role = "BRANCH_MANAGER";
+      try {
+        role = storedUser ? JSON.parse(storedUser).role : "BRANCH_MANAGER";
+      } catch {}
+      router.push(
+        role === "ADMIN" ? "/admin/month-close" : "/staff/month-close",
+      );
+    } else if (
+      ["PAYROLL_FINALIZED", "PAYROLL_PAID"].includes(notification.type)
+    ) {
       const storedUser = sessionStorage.getItem("user");
       let role = "STAFF";
       try {
@@ -187,7 +198,9 @@ export default function NotificationBell() {
       try {
         role = storedUser ? JSON.parse(storedUser).role : "BRANCH_MANAGER";
       } catch {}
-      router.push(role === "ADMIN" ? "/admin/inventory-lots" : "/staff/inventory-lots");
+      router.push(
+        role === "ADMIN" ? "/admin/inventory-lots" : "/staff/inventory-lots",
+      );
     } else if (
       [
         "ATTENDANCE_PERIOD_APPROVED",

@@ -6,6 +6,7 @@ import {
 import { randomUUID } from 'crypto';
 import type { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { assertAccountingMonthOpen } from '../month-close/month-close-lock.util';
 import {
   flattenPersonProfile,
   personProfileSelect,
@@ -139,6 +140,13 @@ export class InventoryCountsService {
 
   async create(userId: number, role: string, dto: CreateInventoryCountDto) {
     await this.inventoryService.getScopedBranch(userId, role, dto.branchId);
+    const countedAt = new Date(dto.countedAt);
+    await assertAccountingMonthOpen(
+      this.prisma,
+      dto.branchId,
+      countedAt,
+      'lập phiếu kiểm kê',
+    );
     const items = await this.prepareItems(dto);
     const count = await this.prisma.$transaction(async (tx) => {
       const created = await tx.inventoryCount.create({
@@ -146,7 +154,7 @@ export class InventoryCountsService {
           code: `TMP-${randomUUID().slice(0, 18)}`,
           branchId: dto.branchId,
           createdById: userId,
-          countedAt: new Date(dto.countedAt),
+          countedAt,
           note: dto.note?.trim() || null,
           items: { create: items },
         },
@@ -189,12 +197,19 @@ export class InventoryCountsService {
     if (current.branchId !== dto.branchId) {
       throw new BadRequestException('Không thể đổi chi nhánh của phiếu đã tạo');
     }
+    const countedAt = new Date(dto.countedAt);
+    await assertAccountingMonthOpen(
+      this.prisma,
+      current.branchId,
+      countedAt,
+      'sửa phiếu kiểm kê',
+    );
     const items = await this.prepareItems(dto);
     const count = await this.prisma.$transaction(async (tx) => {
       const claimed = await tx.inventoryCount.updateMany({
         where: { id, status: 'DRAFT' },
         data: {
-          countedAt: new Date(dto.countedAt),
+          countedAt,
           note: dto.note?.trim() || null,
         },
       });
@@ -238,6 +253,12 @@ export class InventoryCountsService {
 
   async submit(userId: number, role: string, id: number) {
     const current = await this.findOne(userId, role, id);
+    await assertAccountingMonthOpen(
+      this.prisma,
+      current.branchId,
+      current.countedAt,
+      'gửi duyệt phiếu kiểm kê',
+    );
     if (current.status !== 'DRAFT') {
       throw new BadRequestException(
         'Phiếu kiểm kê không còn ở trạng thái nháp',
@@ -310,6 +331,12 @@ export class InventoryCountsService {
 
   async approve(userId: number, id: number, dto: ReviewInventoryCountDto) {
     const current = await this.findOne(userId, 'ADMIN', id);
+    await assertAccountingMonthOpen(
+      this.prisma,
+      current.branchId,
+      current.countedAt,
+      'duyệt phiếu kiểm kê',
+    );
     if (current.status !== 'PENDING') {
       throw new BadRequestException('Chỉ phiếu đang chờ mới được duyệt');
     }
@@ -448,6 +475,12 @@ export class InventoryCountsService {
       throw new BadRequestException('Vui lòng nhập lý do từ chối');
     }
     const current = await this.findOne(userId, 'ADMIN', id);
+    await assertAccountingMonthOpen(
+      this.prisma,
+      current.branchId,
+      current.countedAt,
+      'từ chối phiếu kiểm kê',
+    );
     if (current.status !== 'PENDING') {
       throw new BadRequestException('Chỉ phiếu đang chờ mới được từ chối');
     }
@@ -494,6 +527,12 @@ export class InventoryCountsService {
 
   async cancel(userId: number, role: string, id: number) {
     const current = await this.findOne(userId, role, id);
+    await assertAccountingMonthOpen(
+      this.prisma,
+      current.branchId,
+      current.countedAt,
+      'hủy phiếu kiểm kê',
+    );
     if (!['DRAFT', 'PENDING'].includes(current.status)) {
       throw new BadRequestException('Phiếu kiểm kê này không thể hủy');
     }

@@ -13,6 +13,7 @@ import {
   personProfileSelect,
 } from '../common/user-profiles/user-profiles.util';
 import { PrismaService } from '../prisma/prisma.service';
+import { assertAccountingMonthOpen } from '../month-close/month-close-lock.util';
 import {
   ApproveCashSessionDto,
   CloseCashSessionDto,
@@ -582,6 +583,12 @@ export class CashSessionsService {
     if (current.status === CashSessionStatus.OPEN) {
       throw new BadRequestException('Sổ quỹ đang mở');
     }
+    await assertAccountingMonthOpen(
+      this.prisma,
+      current.branchId,
+      current.businessDate,
+      'mở lại sổ quỹ',
+    );
     const live = await this.calculate(
       this.prisma,
       current.branchId,

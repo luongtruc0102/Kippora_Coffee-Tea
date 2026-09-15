@@ -14,6 +14,7 @@ import {
   personProfileSelect,
 } from '../common/user-profiles/user-profiles.util';
 import { PrismaService } from '../prisma/prisma.service';
+import { assertAccountingMonthOpen } from '../month-close/month-close-lock.util';
 import { CreateExpenseDto, UpdateExpenseDto } from './dto/create-expense.dto';
 import { ListExpensesDto } from './dto/list-expenses.dto';
 import { ReviewExpenseDto } from './dto/review-expense.dto';
@@ -266,6 +267,12 @@ export class ExpensesService {
       throw new BadRequestException('Vui lòng nhập nội dung khoản chi');
     }
     const incurredOn = this.incurredDate(dto.incurredOn);
+    await assertAccountingMonthOpen(
+      this.prisma,
+      dto.branchId,
+      incurredOn,
+      'lập khoản chi',
+    );
     const created = await this.prisma.$transaction(async (tx) => {
       const draft = await tx.branchExpense.create({
         data: {
@@ -325,6 +332,13 @@ export class ExpensesService {
     if (!description) {
       throw new BadRequestException('Vui lòng nhập nội dung khoản chi');
     }
+    const incurredOn = this.incurredDate(dto.incurredOn);
+    await assertAccountingMonthOpen(
+      this.prisma,
+      current.branchId,
+      incurredOn,
+      'sửa khoản chi',
+    );
     const claimed = await this.prisma.branchExpense.updateMany({
       where: {
         id,
@@ -334,7 +348,7 @@ export class ExpensesService {
         category: dto.category,
         paymentMethod: dto.paymentMethod,
         amount: dto.amount,
-        incurredOn: this.incurredDate(dto.incurredOn),
+        incurredOn,
         description,
         note: dto.note?.trim() || null,
         status: ExpenseStatus.DRAFT,
@@ -366,6 +380,12 @@ export class ExpensesService {
 
   async submit(viewerId: number, viewerRole: string, id: number) {
     const current = await this.loadScoped(viewerId, viewerRole, id);
+    await assertAccountingMonthOpen(
+      this.prisma,
+      current.branchId,
+      current.incurredOn,
+      'gửi duyệt khoản chi',
+    );
     this.assertOwner(viewerId, viewerRole, current);
     if (
       current.status !== ExpenseStatus.DRAFT &&
@@ -441,6 +461,12 @@ export class ExpensesService {
       throw new ForbiddenException('Chỉ Admin được duyệt khoản chi');
     }
     const current = await this.load(id);
+    await assertAccountingMonthOpen(
+      this.prisma,
+      current.branchId,
+      current.incurredOn,
+      'duyệt khoản chi',
+    );
     if (current.status !== ExpenseStatus.PENDING) {
       throw new BadRequestException('Khoản chi không còn chờ duyệt');
     }
@@ -516,6 +542,12 @@ export class ExpensesService {
 
   async cancel(viewerId: number, viewerRole: string, id: number) {
     const current = await this.loadScoped(viewerId, viewerRole, id);
+    await assertAccountingMonthOpen(
+      this.prisma,
+      current.branchId,
+      current.incurredOn,
+      'hủy khoản chi',
+    );
     this.assertOwner(viewerId, viewerRole, current);
     if (
       current.status !== ExpenseStatus.DRAFT &&

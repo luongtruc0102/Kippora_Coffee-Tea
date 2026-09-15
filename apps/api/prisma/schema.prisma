@@ -86,6 +86,10 @@ model User {
   processedPaymentRefunds    PaymentRefund[]              @relation("PaymentRefundProcessor")
   /// Các lần Admin áp dụng giá bán mới; quan hệ chỉ phục vụ truy vết người thực hiện.
   productPriceChanges        ProductPriceHistory[]        @relation("ProductPriceHistoryActor")
+  /// Các kỳ kế toán do tài khoản này chốt hoặc mở lại và toàn bộ sự kiện liên quan.
+  closedMonthlyPeriods       MonthlyClosePeriod[]         @relation("MonthlyCloseCloser")
+  reopenedMonthlyPeriods     MonthlyClosePeriod[]         @relation("MonthlyCloseReopener")
+  monthlyCloseEvents         MonthlyCloseEvent[]          @relation("MonthlyCloseEventActor")
 
   // Trạng thái tài khoản: true = hoạt động, false = bị khóa
   isActive Boolean @default(true)
@@ -459,6 +463,18 @@ enum CashSessionEventType {
   OPENED
   CLOSED
   APPROVED
+  REOPENED
+}
+
+/// OPEN cho phép tiếp tục hoàn thiện chứng từ; CLOSED giữ snapshot kế toán bất biến của tháng.
+enum MonthlyCloseStatus {
+  OPEN
+  CLOSED
+}
+
+/// Lịch sử chốt và mở lại kỳ được lưu thành từng sự kiện không sửa hoặc xóa.
+enum MonthlyCloseEventType {
+  CLOSED
   REOPENED
 }
 
@@ -1108,6 +1124,8 @@ model StoreBranch {
   paymentRefunds        PaymentRefund[]
   /// Lịch sử giá đã dùng chi nhánh này làm cơ sở tính giá vốn.
   productPriceHistory   ProductPriceHistory[]
+  /// Các kỳ kế toán tháng của chi nhánh.
+  monthlyClosePeriods   MonthlyClosePeriod[]
 }
 
 /// Lịch sử giá bán bất biến của từng size sau khi được Admin xác nhận áp dụng.
@@ -1299,6 +1317,66 @@ model CashSessionEvent {
   createdAt  DateTime             @default(now())
 
   @@index([cashSessionId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([type, createdAt])
+}
+
+/// Trạng thái chốt sổ của một chi nhánh trong một tháng.
+/// snapshot chứa toàn bộ báo cáo lợi nhuận tại lần chốt gần nhất; mỗi phiên bản cũ vẫn nằm trong MonthlyCloseEvent.
+model MonthlyClosePeriod {
+  id Int @id @default(autoincrement())
+
+  branchId Int
+  branch   StoreBranch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  /// Ngày đầu tháng và ngày đầu tháng kế tiếp, lưu theo DATE để không lệch múi giờ.
+  periodStart DateTime           @db.Date
+  periodEnd   DateTime           @db.Date
+  status      MonthlyCloseStatus @default(OPEN)
+  /// Tăng sau mỗi lần chốt lại để truy vết các phiên bản sau khi mở kỳ.
+  version     Int                @default(0)
+
+  /// Ảnh chụp doanh thu, hoàn tiền, giá vốn, lương, chi phí, hao hụt và lợi nhuận.
+  snapshot Json?
+
+  closedById Int?
+  closedBy   User?     @relation("MonthlyCloseCloser", fields: [closedById], references: [id], onDelete: SetNull)
+  closedAt   DateTime?
+  closeNote  String?   @db.VarChar(500)
+
+  reopenedById Int?
+  reopenedBy   User?     @relation("MonthlyCloseReopener", fields: [reopenedById], references: [id], onDelete: SetNull)
+  reopenedAt   DateTime?
+  reopenReason String?   @db.VarChar(500)
+
+  events MonthlyCloseEvent[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([branchId, periodStart])
+  @@index([status, periodStart])
+  @@index([closedById, closedAt])
+}
+
+/// Sự kiện bất biến lưu cả snapshot của từng lần chốt để báo cáo cũ không bị ghi đè khi chốt lại.
+model MonthlyCloseEvent {
+  id Int @id @default(autoincrement())
+
+  periodId Int
+  period   MonthlyClosePeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  type     MonthlyCloseEventType
+  version  Int
+  reason   String?               @db.VarChar(500)
+  snapshot Json?
+
+  actorId Int?
+  actor   User? @relation("MonthlyCloseEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([periodId, createdAt])
   @@index([actorId, createdAt])
   @@index([type, createdAt])
 }

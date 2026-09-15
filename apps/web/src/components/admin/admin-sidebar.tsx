@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   Bell,
   Banknote,
+  BookCheck,
   CalendarDays,
   ClipboardCheck,
   ClipboardList,
@@ -73,6 +74,11 @@ const menuGroups = [
         label: "Giá vốn & lợi nhuận",
         href: "/admin/profitability",
         icon: TrendingUp,
+      },
+      {
+        label: "Chốt sổ tháng",
+        href: "/admin/month-close",
+        icon: BookCheck,
       },
     ],
   },

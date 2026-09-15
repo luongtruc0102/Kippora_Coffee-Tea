@@ -197,4 +197,19 @@ describe('CashSessionsService', () => {
       service.findAll(2, 'BRANCH_MANAGER', {}),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
+
+  it('does not reopen a daily cash session after its month is closed', async () => {
+    const current = cashSession(CashSessionStatus.APPROVED);
+    const prisma = {
+      cashSession: { findUnique: jest.fn().mockResolvedValue(current) },
+      monthlyClosePeriod: {
+        findUnique: jest.fn().mockResolvedValue({ status: 'CLOSED' }),
+      },
+    };
+    const service = new CashSessionsService(prisma as unknown as PrismaService);
+
+    await expect(
+      service.reopen(1, current.id, { reason: 'Kiểm tra lại tiền mặt' }),
+    ).rejects.toThrow('Tháng 2026-09 đã chốt sổ');
+  });
 });

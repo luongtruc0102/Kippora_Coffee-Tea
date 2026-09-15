@@ -14,7 +14,8 @@ export type AuditLogInput = {
     | 'CASH_RECONCILIATION'
     | 'ORDER'
     | 'PAYMENT'
-    | 'PRICING';
+    | 'PRICING'
+    | 'MONTH_CLOSE';
   action: string;
   entityType: string;
   entityId?: string | number | null;

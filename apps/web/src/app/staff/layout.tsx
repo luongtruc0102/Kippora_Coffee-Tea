@@ -2,6 +2,7 @@
 
 import {
   Banknote,
+  BookCheck,
   CalendarDays,
   ChevronDown,
   ClipboardCheck,
@@ -73,6 +74,7 @@ export default function StaffLayout({
     "/staff/purchase-orders",
     "/staff/cash-reconciliation",
     "/staff/activity-logs",
+    "/staff/month-close",
   ].some((route) => pathname.startsWith(route));
 
   useEffect(() => {
@@ -430,6 +432,19 @@ export default function StaffLayout({
                     >
                       <ScrollText size={17} />
                       Nhật ký
+                    </Link>
+                    <Link
+                      href="/staff/month-close"
+                      role="menuitem"
+                      onClick={() => setManagementMenuOpen(false)}
+                      className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
+                        pathname.startsWith("/staff/month-close")
+                          ? "bg-[#F3E9DE] text-[#4A2C20]"
+                          : "text-[#5E5650] hover:bg-[#FAF8F5] hover:text-[#4A2C20]"
+                      }`}
+                    >
+                      <BookCheck size={17} />
+                      Chốt sổ tháng
                     </Link>
                   </div>
                 )}

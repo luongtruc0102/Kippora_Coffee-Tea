@@ -49,6 +49,10 @@ const moduleView: Record<AuditModule, { label: string; className: string }> = {
     label: "Định giá món",
     className: "bg-lime-50 text-lime-700",
   },
+  MONTH_CLOSE: {
+    label: "Chốt sổ tháng",
+    className: "bg-teal-50 text-teal-700",
+  },
 };
 
 const actionLabels: Record<string, string> = {
@@ -107,6 +111,8 @@ const actionLabels: Record<string, string> = {
   REFUND_AND_CANCEL_ORDER: "Hủy đơn và hoàn tiền",
   UPDATE_POLICY: "Đổi chính sách định giá",
   APPLY_PRICE: "Áp dụng giá bán mới",
+  CLOSE_MONTH: "Chốt sổ tháng",
+  REOPEN_MONTH: "Mở lại kỳ kế toán",
 };
 
 const fieldLabels: Record<string, string> = {
@@ -601,7 +607,8 @@ export default function AuditLogPage({ mode }: Props) {
           (data?.summary.byModule.EXPENSE ?? 0) +
           (data?.summary.byModule.CASH_RECONCILIATION ?? 0) +
           (data?.summary.byModule.PAYMENT ?? 0) +
-          (data?.summary.byModule.PRICING ?? 0),
+          (data?.summary.byModule.PRICING ?? 0) +
+          (data?.summary.byModule.MONTH_CLOSE ?? 0),
         icon: Landmark,
         className: "bg-violet-50 text-violet-700",
       },

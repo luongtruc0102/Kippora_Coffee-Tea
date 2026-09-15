@@ -32,6 +32,7 @@ import { ExpensesModule } from './expenses/expenses.module';
 import { CashSessionsModule } from './cash-sessions/cash-sessions.module';
 import { ProfitabilityModule } from './profitability/profitability.module';
 import { PricingModule } from './pricing/pricing.module';
+import { MonthCloseModule } from './month-close/month-close.module';
 
 @Module({
   imports: [
@@ -121,6 +122,9 @@ import { PricingModule } from './pricing/pricing.module';
 
     // Đề xuất giá theo giá lô FEFO, biên mục tiêu và lịch sử Admin áp dụng giá.
     PricingModule,
+
+    // Chốt sổ kế toán tháng theo chi nhánh và lưu snapshot báo cáo bất biến.
+    MonthCloseModule,
   ],
 
   providers: [
