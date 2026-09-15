@@ -7,7 +7,8 @@ export type AuditModule =
   | "EXPENSE"
   | "CASH_RECONCILIATION"
   | "ORDER"
-  | "PAYMENT";
+  | "PAYMENT"
+  | "PRICING";
 
 export type AuditLogItem = {
   id: number;

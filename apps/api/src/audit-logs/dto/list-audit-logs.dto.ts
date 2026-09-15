@@ -20,6 +20,7 @@ export const AUDIT_MODULES = [
   'CASH_RECONCILIATION',
   'ORDER',
   'PAYMENT',
+  'PRICING',
 ] as const;
 
 export class ListAuditLogsDto {

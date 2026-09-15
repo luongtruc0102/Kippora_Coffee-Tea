@@ -10,6 +10,7 @@ import {
   ClipboardList,
   Boxes,
   Building2,
+  Calculator,
   Coffee,
   CreditCard,
   Images,
@@ -84,6 +85,11 @@ const menuGroups = [
         label: "Sản phẩm",
         href: "/admin/products",
         icon: Package,
+      },
+      {
+        label: "Định giá món",
+        href: "/admin/pricing",
+        icon: Calculator,
       },
       {
         label: "Danh mục",

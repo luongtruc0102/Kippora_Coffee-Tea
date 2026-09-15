@@ -31,6 +31,7 @@ import { AuditLogsModule } from './audit-logs/audit-logs.module';
 import { ExpensesModule } from './expenses/expenses.module';
 import { CashSessionsModule } from './cash-sessions/cash-sessions.module';
 import { ProfitabilityModule } from './profitability/profitability.module';
+import { PricingModule } from './pricing/pricing.module';
 
 @Module({
   imports: [
@@ -117,6 +118,9 @@ import { ProfitabilityModule } from './profitability/profitability.module';
 
     // Giá vốn theo lô và báo cáo lợi nhuận thực tế dành cho Admin.
     ProfitabilityModule,
+
+    // Đề xuất giá theo giá lô FEFO, biên mục tiêu và lịch sử Admin áp dụng giá.
+    PricingModule,
   ],
 
   providers: [
