@@ -38,6 +38,7 @@ export class DashboardOperationsService {
     const today = vietnamDateKey(now);
     const todayStart = new Date(`${today}T00:00:00+07:00`);
     const tomorrowStart = new Date(todayStart.getTime() + 86_400_000);
+    const inSevenDays = new Date(todayStart.getTime() + 7 * 86_400_000);
     const todayBusinessDate = new Date(`${today}T00:00:00.000Z`);
     const payrollMonth = previousMonthKey(now);
     const payrollRange = getPayrollMonthRange(payrollMonth);
@@ -54,6 +55,13 @@ export class DashboardOperationsService {
       draftStockReceipts,
       pendingExpenses,
       cashSessionActions,
+      expiredLotCount,
+      expiringLotCount,
+      inventoryLotAlerts,
+      pendingInventoryCounts,
+      pendingPurchaseOrders,
+      overduePurchaseOrders,
+      bankReconciliationIssues,
     ] = await Promise.all([
       this.prisma.storeBranch.findMany({
         where: { isActive: true, ...(branchId ? { id: branchId } : {}) },
@@ -161,6 +169,66 @@ export class DashboardOperationsService {
         },
         orderBy: [{ businessDate: 'asc' }, { id: 'asc' }],
       }),
+      this.prisma.inventoryLot.count({
+        where: {
+          ...(branchId ? { branchId } : {}),
+          status: 'ACTIVE',
+          quantity: { gt: 0 },
+          expiresAt: { lt: todayStart },
+        },
+      }),
+      this.prisma.inventoryLot.count({
+        where: {
+          ...(branchId ? { branchId } : {}),
+          status: 'ACTIVE',
+          quantity: { gt: 0 },
+          expiresAt: { gte: todayStart, lte: inSevenDays },
+        },
+      }),
+      this.prisma.inventoryLot.findMany({
+        where: {
+          ...(branchId ? { branchId } : {}),
+          status: 'ACTIVE',
+          quantity: { gt: 0 },
+          expiresAt: { lte: inSevenDays },
+        },
+        select: {
+          id: true,
+          code: true,
+          expiresAt: true,
+          quantity: true,
+          reservedQuantity: true,
+          ingredient: { select: { name: true, unit: true } },
+          branch: { select: { id: true, code: true, name: true } },
+        },
+        orderBy: [{ expiresAt: 'asc' }, { id: 'asc' }],
+        take: 6,
+      }),
+      this.prisma.inventoryCount.count({
+        where: {
+          ...(branchId ? { branchId } : {}),
+          status: 'PENDING',
+        },
+      }),
+      this.prisma.purchaseOrder.count({
+        where: {
+          ...(branchId ? { branchId } : {}),
+          status: 'PENDING',
+        },
+      }),
+      this.prisma.purchaseOrder.count({
+        where: {
+          ...(branchId ? { branchId } : {}),
+          status: { in: ['ORDERED', 'PARTIALLY_RECEIVED'] },
+          expectedAt: { lt: todayStart },
+        },
+      }),
+      this.prisma.bankTransaction.count({
+        where: {
+          ...(branchId ? { bankAccount: { branchId } } : {}),
+          status: { in: ['UNMATCHED', 'AMOUNT_MISMATCH', 'DUPLICATE'] },
+        },
+      }),
     ]);
 
     const lowStockItems = stocks
@@ -257,6 +325,12 @@ export class DashboardOperationsService {
         pendingExpenses,
         pendingCashSessions,
         overdueCashSessions,
+        expiredLots: expiredLotCount,
+        expiringLots: expiringLotCount,
+        pendingInventoryCounts,
+        pendingPurchaseOrders,
+        overduePurchaseOrders,
+        bankReconciliationIssues,
       },
       lowStockItems: lowStockItems.slice(0, 6),
       pendingLeaveRequests: pendingLeaveRequests.map((request) => ({
@@ -284,6 +358,32 @@ export class DashboardOperationsService {
         difference:
           session.difference === null ? null : Number(session.difference),
       })),
+      inventoryLotAlerts: inventoryLotAlerts.map((lot) => {
+        const quantity = Number(lot.quantity);
+        const reservedQuantity = Number(lot.reservedQuantity);
+        const daysToExpiry = lot.expiresAt
+          ? Math.ceil(
+              (lot.expiresAt.getTime() - todayStart.getTime()) / 86_400_000,
+            )
+          : null;
+
+        return {
+          id: lot.id,
+          code: lot.code,
+          ingredientName: lot.ingredient.name,
+          unit: lot.ingredient.unit,
+          quantity,
+          reservedQuantity,
+          availableQuantity: Math.max(0, quantity - reservedQuantity),
+          expiresAt: lot.expiresAt,
+          daysToExpiry,
+          expiryState:
+            daysToExpiry !== null && daysToExpiry < 0
+              ? ('EXPIRED' as const)
+              : ('EXPIRING' as const),
+          branch: lot.branch,
+        };
+      }),
     };
   }
 

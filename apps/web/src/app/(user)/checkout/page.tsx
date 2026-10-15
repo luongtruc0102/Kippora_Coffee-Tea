@@ -41,13 +41,9 @@ import { getMe } from "@/services/auth.service";
 
 import { getCheckoutVouchers } from "@/services/voucher.service";
 
-import {
-  getMyAddresses,
-} from "@/services/address.service";
+import { getMyAddresses } from "@/services/address.service";
 
-import type {
-  UserAddress,
-} from "@/types/address";
+import type { UserAddress } from "@/types/address";
 
 import type { Cart } from "@/types/cart";
 
@@ -57,11 +53,10 @@ import type { FulfillmentMethod, PaymentMethod } from "@/types/order";
 
 import { consumeReorderCheckoutMessage } from "@/utils/cart.util";
 import {
+  getPublicStoreLocations,
   getStoreStatus,
 } from "@/services/store-settings.service";
-import type {
-  StoreStatus,
-} from "@/types/store-settings";
+import type { PublicStoreLocation, StoreStatus } from "@/types/store-settings";
 
 const DeliveryRouteMap = dynamic(
   () => import("@/components/user/delivery-route-map"),
@@ -114,13 +109,12 @@ export default function CheckoutPage() {
   const [fulfillmentMethod, setFulfillmentMethod] =
     useState<FulfillmentMethod>("DELIVERY");
 
-  const [
-    storeStatus,
-    setStoreStatus,
-  ] =
-    useState<StoreStatus | null>(
-      null,
-    );
+  const [storeStatus, setStoreStatus] = useState<StoreStatus | null>(null);
+  const [storeLocations, setStoreLocations] = useState<PublicStoreLocation[]>(
+    [],
+  );
+  const [selectedBranchId, setSelectedBranchId] = useState<number | null>(null);
+  const [branchLoading, setBranchLoading] = useState(false);
 
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
   const [customerCoordinates, setCustomerCoordinates] = useState<{
@@ -150,17 +144,9 @@ export default function CheckoutPage() {
   const [reorderMessage, setReorderMessage] = useState("");
 
   // Sổ địa chỉ dùng để chọn nhanh thông tin nhận hàng.
-  const [
-    savedAddresses,
-    setSavedAddresses,
-  ] = useState<UserAddress[]>(
-    [],
-  );
+  const [savedAddresses, setSavedAddresses] = useState<UserAddress[]>([]);
 
-  const [
-    selectedSavedAddressId,
-    setSelectedSavedAddressId,
-  ] = useState<
+  const [selectedSavedAddressId, setSelectedSavedAddressId] = useState<
     number | null
   >(null);
 
@@ -246,24 +232,30 @@ export default function CheckoutPage() {
           .filter((item) => validIds.includes(item.id))
           .reduce((total, item) => total + Number(item.lineTotal), 0);
 
-          const [
-            availableVouchers,
-            userData,
-            addressData,
-            storeStatusData,
-          ] = await Promise.all([
-            getCheckoutVouchers(
-              accessToken,
-              checkoutSubtotal,
-            ),
+        const locationData = await getPublicStoreLocations();
+        const storedBranchId = Number(
+          sessionStorage.getItem("checkoutBranchId"),
+        );
+        const preferredLocation =
+          locationData.find(
+            (location) => location.id === storedBranchId && location.isOpen,
+          ) ??
+          locationData.find((location) => location.isOpen) ??
+          locationData[0];
+
+        if (!preferredLocation) {
+          throw new Error("Chưa có chi nhánh nào để nhận đơn");
+        }
+
+        const [availableVouchers, userData, addressData, storeStatusData] =
+          await Promise.all([
+            getCheckoutVouchers(accessToken, checkoutSubtotal),
 
             getMe(accessToken),
 
-            getMyAddresses(
-              accessToken,
-            ),
+            getMyAddresses(accessToken),
 
-            getStoreStatus(),
+            getStoreStatus(undefined, preferredLocation.id),
           ]);
 
         setCart(cartData);
@@ -272,94 +264,64 @@ export default function CheckoutPage() {
 
         setVouchers(availableVouchers);
 
-        setStoreStatus(
-          storeStatusData,
+        setStoreStatus(storeStatusData);
+        setStoreLocations(locationData);
+        setSelectedBranchId(preferredLocation.id);
+        sessionStorage.setItem(
+          "checkoutBranchId",
+          String(preferredLocation.id),
         );
 
         if (
-          !storeStatusData
-            .deliveryAvailable &&
-          storeStatusData
-            .pickupAvailable
+          !storeStatusData.deliveryAvailable &&
+          storeStatusData.pickupAvailable
         ) {
-          setFulfillmentMethod(
-            "PICKUP",
-          );
+          setFulfillmentMethod("PICKUP");
         }
 
-        setSavedAddresses(
-          addressData,
-        );
+        setSavedAddresses(addressData);
 
         const defaultAddress =
-          addressData.find(
-            (address) =>
-              address.isDefault,
-          ) ??
+          addressData.find((address) => address.isDefault) ??
           addressData[0] ??
           null;
 
         if (defaultAddress) {
           const coordinate = {
-            latitude: Number(
-              defaultAddress.latitude,
-            ),
+            latitude: Number(defaultAddress.latitude),
 
-            longitude: Number(
-              defaultAddress.longitude,
-            ),
+            longitude: Number(defaultAddress.longitude),
           };
 
-          setSelectedSavedAddressId(
-            defaultAddress.id,
-          );
+          setSelectedSavedAddressId(defaultAddress.id);
 
-          setReceiverName(
-            defaultAddress.receiverName,
-          );
+          setReceiverName(defaultAddress.receiverName);
 
-          setReceiverPhone(
-            defaultAddress.receiverPhone,
-          );
+          setReceiverPhone(defaultAddress.receiverPhone);
 
-          setDeliveryAddress(
-            defaultAddress.addressLine,
-          );
+          setDeliveryAddress(defaultAddress.addressLine);
 
           // Lưu tọa độ để effect tính tuyến bằng vị trí chính xác,
           // không phải geocode lại chuỗi địa chỉ.
           resolvedDeliveryLocation.current = {
-            address:
-              defaultAddress.addressLine,
+            address: defaultAddress.addressLine,
 
-            latitude:
-              coordinate.latitude,
+            latitude: coordinate.latitude,
 
-            longitude:
-              coordinate.longitude,
+            longitude: coordinate.longitude,
           };
         } else {
           // Tài khoản cũ chưa có sổ địa chỉ vẫn dùng dữ liệu User hiện tại.
-          setSelectedSavedAddressId(
-            null,
-          );
+          setSelectedSavedAddressId(null);
 
-          setReceiverName(
-            userData.fullName ?? "",
-          );
+          setReceiverName(userData.fullName ?? "");
 
-          setReceiverPhone(
-            userData.phone ?? "",
-          );
+          setReceiverPhone(userData.phone ?? "");
 
-          setDeliveryAddress(
-            userData.address ?? "",
-          );
+          setDeliveryAddress(userData.address ?? "");
         }
 
-        setLoyaltyPoints(
-          userData.loyaltyPoints ?? 0,
-        );
+        setLoyaltyPoints(userData.loyaltyPoints ?? 0);
       } catch (error) {
         setError(
           error instanceof Error
@@ -406,56 +368,65 @@ export default function CheckoutPage() {
   }, [selectedVoucherCodes, subtotal, vouchers]);
 
   // Tính phí giao hàng xem trước theo khoảng cách và chính sách hiện tại.
+  const deliveryBaseDistanceKm = storeStatus?.deliveryBaseDistanceKm ?? 3;
+  const configuredDeliveryBaseFee = storeStatus?.deliveryBaseFee ?? 15000;
+  const deliveryFeePerKm = storeStatus?.deliveryFeePerKm ?? 5000;
+  const firstDeliveryDiscountThreshold =
+    storeStatus?.deliveryDiscountFirstThreshold ?? 300000;
+  const firstDeliveryDiscountAmount =
+    storeStatus?.deliveryDiscountFirstAmount ?? 20000;
+  const secondDeliveryDiscountThreshold =
+    storeStatus?.deliveryDiscountSecondThreshold ?? 500000;
+  const secondDeliveryDiscountAmount =
+    storeStatus?.deliveryDiscountSecondAmount ?? 40000;
   const deliveryBaseFee =
     fulfillmentMethod === "PICKUP" || distanceKm === null
       ? 0
-      : 15000 + Math.max(0, Math.ceil(distanceKm - 3)) * 5000;
+      : configuredDeliveryBaseFee +
+        Math.max(0, Math.ceil(distanceKm - deliveryBaseDistanceKm)) *
+          deliveryFeePerKm;
 
   const deliveryDiscount =
     fulfillmentMethod === "PICKUP" || distanceKm === null
       ? 0
-      : subtotal >= 500000
-        ? Math.min(40000, deliveryBaseFee)
-        : subtotal >= 300000
-          ? Math.min(20000, deliveryBaseFee)
+      : subtotal >= secondDeliveryDiscountThreshold
+        ? Math.min(secondDeliveryDiscountAmount, deliveryBaseFee)
+        : subtotal >= firstDeliveryDiscountThreshold
+          ? Math.min(firstDeliveryDiscountAmount, deliveryBaseFee)
           : 0;
 
   const deliveryFee = Math.max(0, deliveryBaseFee - deliveryDiscount);
 
   const deliveryDistanceExceeded =
-    fulfillmentMethod ===
-      "DELIVERY" &&
+    fulfillmentMethod === "DELIVERY" &&
     distanceKm !== null &&
     storeStatus !== null &&
-    distanceKm >
-      storeStatus
-        .maxDeliveryDistanceKm;
+    distanceKm > storeStatus.maxDeliveryDistanceKm;
 
   const selectedMethodAvailable =
-    fulfillmentMethod ===
-    "DELIVERY"
-      ? Boolean(
-          storeStatus
-            ?.deliveryAvailable,
-        )
-      : Boolean(
-          storeStatus
-            ?.pickupAvailable,
-        );
+    fulfillmentMethod === "DELIVERY"
+      ? Boolean(storeStatus?.deliveryAvailable)
+      : Boolean(storeStatus?.pickupAvailable);
 
   const storeCheckoutDisabled =
+    branchLoading ||
     !storeStatus?.isOpen ||
     !selectedMethodAvailable ||
     deliveryDistanceExceeded;
 
-  // Lấy vị trí cửa hàng từ môi trường để dùng chung cho bản đồ và pickup.
+  const selectedStoreLocation = storeLocations.find(
+    (location) => location.id === selectedBranchId,
+  );
+
+  // Lấy vị trí từ đúng chi nhánh đã chọn để dùng chung cho bản đồ và pickup.
   const configuredStoreCoordinates = {
-    latitude: Number(process.env.NEXT_PUBLIC_STORE_LATITUDE),
-    longitude: Number(process.env.NEXT_PUBLIC_STORE_LONGITUDE),
+    latitude: selectedStoreLocation?.latitude ?? Number.NaN,
+    longitude: selectedStoreLocation?.longitude ?? Number.NaN,
   };
   const configuredStoreAddress =
-    process.env.NEXT_PUBLIC_STORE_ADDRESS ??
-    "78 Đường Số 29, phường Hiệp Bình, TP. Hồ Chí Minh";
+    selectedStoreLocation?.address ??
+    storeStatus?.branch.address ??
+    "Chi nhánh chưa cập nhật địa chỉ";
 
   const hasStoreCoordinates =
     Number.isFinite(configuredStoreCoordinates.latitude) &&
@@ -511,15 +482,12 @@ export default function CheckoutPage() {
   function selectFulfillmentMethod(method: FulfillmentMethod) {
     const methodAvailable =
       method === "DELIVERY"
-        ? storeStatus
-            ?.deliveryAvailable
-        : storeStatus
-            ?.pickupAvailable;
+        ? storeStatus?.deliveryAvailable
+        : storeStatus?.pickupAvailable;
 
     if (!methodAvailable) {
       setError(
-        storeStatus
-          ?.unavailableReason ||
+        storeStatus?.unavailableReason ||
           "Phương thức nhận hàng này hiện không khả dụng",
       );
       return;
@@ -533,6 +501,52 @@ export default function CheckoutPage() {
     setCustomerCoordinates(null);
     setRouteCoordinates([]);
     setDistanceKm(null);
+  }
+
+  async function handleBranchChange(value: string) {
+    const branchId = Number(value);
+    if (!Number.isInteger(branchId) || branchId <= 0 || branchLoading) return;
+
+    const previousBranchId = selectedBranchId;
+    setBranchLoading(true);
+    setSelectedBranchId(branchId);
+    setStoreStatus(null);
+    setError("");
+    setDeliveryError("");
+    deliveryRequestId.current += 1;
+    addressSuggestionRequestId.current += 1;
+    setCalculatingDelivery(false);
+    setCustomerCoordinates(null);
+    setRouteCoordinates([]);
+    setDistanceKm(null);
+
+    try {
+      const nextStatus = await getStoreStatus(undefined, branchId);
+      setStoreStatus(nextStatus);
+      sessionStorage.setItem("checkoutBranchId", String(branchId));
+
+      if (!nextStatus.bankTransferAvailable) {
+        setPaymentMethod("COD");
+      }
+
+      if (!nextStatus.deliveryAvailable && nextStatus.pickupAvailable) {
+        setFulfillmentMethod("PICKUP");
+      } else if (!nextStatus.pickupAvailable && nextStatus.deliveryAvailable) {
+        setFulfillmentMethod("DELIVERY");
+      }
+    } catch (branchError) {
+      setSelectedBranchId(previousBranchId);
+      if (previousBranchId) {
+        setStoreStatus(await getStoreStatus(undefined, previousBranchId));
+      }
+      setError(
+        branchError instanceof Error
+          ? branchError.message
+          : "Không thể đổi chi nhánh",
+      );
+    } finally {
+      setBranchLoading(false);
+    }
   }
 
   // Debounce việc gợi ý địa chỉ; requestId ngăn response cũ ghi đè từ khóa
@@ -558,6 +572,7 @@ export default function CheckoutPage() {
         const suggestions = await getAddressSuggestions(
           accessToken,
           normalizedAddress,
+          selectedBranchId ?? undefined,
         );
 
         if (requestId === addressSuggestionRequestId.current) {
@@ -579,7 +594,13 @@ export default function CheckoutPage() {
         addressSuggestionRequestId.current += 1;
       }
     };
-  }, [deliveryAddress, loading, router, showAddressSuggestions]);
+  }, [
+    deliveryAddress,
+    loading,
+    router,
+    selectedBranchId,
+    showAddressSuggestions,
+  ]);
 
   // Tự động geocode địa chỉ, dựng tuyến và tính khoảng cách sau khi user
   // ngừng nhập; request cũ được vô hiệu bằng deliveryRequestId.
@@ -590,7 +611,7 @@ export default function CheckoutPage() {
       return;
     }
 
-    const quoteKey = `${fulfillmentMethod}:${normalizedAddress}`;
+    const quoteKey = `${selectedBranchId}:${fulfillmentMethod}:${normalizedAddress}`;
     if (skipAutomaticAddressQuote.current === quoteKey) {
       skipAutomaticAddressQuote.current = null;
       return;
@@ -619,12 +640,14 @@ export default function CheckoutPage() {
                   subtotal,
                   fulfillmentMethod,
                   deliveryAddress: normalizedAddress,
+                  branchId: selectedBranchId ?? undefined,
                 })
               : await getDeliveryQuote(
                   accessToken,
                   normalizedAddress,
                   subtotal,
                   fulfillmentMethod,
+                  selectedBranchId ?? undefined,
                 );
 
           if (requestId !== deliveryRequestId.current) {
@@ -676,95 +699,67 @@ export default function CheckoutPage() {
     fulfillmentMethod,
     loading,
     router,
+    selectedBranchId,
     showAddressSuggestions,
     subtotal,
   ]);
 
   // Điền thông tin người nhận từ địa chỉ đã lưu và tính tuyến ngay.
-  function handleSavedAddressSelect(
-    value: string,
-  ) {
+  function handleSavedAddressSelect(value: string) {
     if (value === "MANUAL") {
       deliveryRequestId.current += 1;
       addressSuggestionRequestId.current += 1;
 
-      setSelectedSavedAddressId(
-        null,
-      );
+      setSelectedSavedAddressId(null);
 
       setDeliveryAddress("");
 
       setAddressSuggestions([]);
-      setAddressSuggestionStatus(
-        "idle",
-      );
+      setAddressSuggestionStatus("idle");
 
-      setShowAddressSuggestions(
-        false,
-      );
+      setShowAddressSuggestions(false);
 
-      setCustomerCoordinates(
-        null,
-      );
+      setCustomerCoordinates(null);
 
       setRouteCoordinates([]);
       setDistanceKm(null);
       setDeliveryError("");
 
-      resolvedDeliveryLocation.current =
-        null;
+      resolvedDeliveryLocation.current = null;
 
-      skipAutomaticAddressQuote.current =
-        null;
+      skipAutomaticAddressQuote.current = null;
 
       return;
     }
 
-    const addressId =
-      Number(value);
+    const addressId = Number(value);
 
-    const selectedAddress =
-      savedAddresses.find(
-        (address) =>
-          address.id ===
-          addressId,
-      );
+    const selectedAddress = savedAddresses.find(
+      (address) => address.id === addressId,
+    );
 
     if (!selectedAddress) {
       return;
     }
 
     const coordinate = {
-      latitude: Number(
-        selectedAddress.latitude,
-      ),
+      latitude: Number(selectedAddress.latitude),
 
-      longitude: Number(
-        selectedAddress.longitude,
-      ),
+      longitude: Number(selectedAddress.longitude),
     };
 
-    setSelectedSavedAddressId(
-      selectedAddress.id,
-    );
+    setSelectedSavedAddressId(selectedAddress.id);
 
-    setReceiverName(
-      selectedAddress.receiverName,
-    );
+    setReceiverName(selectedAddress.receiverName);
 
-    setReceiverPhone(
-      selectedAddress.receiverPhone,
-    );
+    setReceiverPhone(selectedAddress.receiverPhone);
 
     resolvedDeliveryLocation.current = {
-      address:
-        selectedAddress.addressLine,
+      address: selectedAddress.addressLine,
 
-      latitude:
-        coordinate.latitude,
+      latitude: coordinate.latitude,
 
-      longitude:
-        coordinate.longitude,
+      longitude: coordinate.longitude,
     };
 
     void calculateDeliveryFromCoordinates(
@@ -803,7 +798,7 @@ export default function CheckoutPage() {
         latitude: coordinate.latitude,
         longitude: coordinate.longitude,
       };
-      skipAutomaticAddressQuote.current = `${fulfillmentMethod}:${selectedAddress}`;
+      skipAutomaticAddressQuote.current = `${selectedBranchId}:${fulfillmentMethod}:${selectedAddress}`;
       setDeliveryAddress(selectedAddress);
     }
 
@@ -813,6 +808,7 @@ export default function CheckoutPage() {
         subtotal,
         fulfillmentMethod,
         deliveryAddress: selectedAddress,
+        branchId: selectedBranchId ?? undefined,
       });
 
       if (requestId !== deliveryRequestId.current) {
@@ -824,7 +820,7 @@ export default function CheckoutPage() {
         latitude: quote.latitude,
         longitude: quote.longitude,
       };
-      skipAutomaticAddressQuote.current = `${fulfillmentMethod}:${quote.normalizedAddress}`;
+      skipAutomaticAddressQuote.current = `${selectedBranchId}:${fulfillmentMethod}:${quote.normalizedAddress}`;
       setDeliveryAddress(quote.normalizedAddress);
       setCustomerCoordinates({
         latitude: quote.latitude,
@@ -867,10 +863,19 @@ export default function CheckoutPage() {
         );
       }
 
+      if (!selectedBranchId) {
+        throw new Error("Vui lòng chọn chi nhánh phục vụ");
+      }
+
+      if (
+        paymentMethod === "BANK_TRANSFER" &&
+        !storeStatus.bankTransferAvailable
+      ) {
+        throw new Error("Chi nhánh chưa hỗ trợ thanh toán bằng chuyển khoản");
+      }
+
       if (!selectedMethodAvailable) {
-        throw new Error(
-          "Phương thức nhận hàng đã chọn hiện không khả dụng",
-        );
+        throw new Error("Phương thức nhận hàng đã chọn hiện không khả dụng");
       }
 
       if (deliveryDistanceExceeded) {
@@ -912,6 +917,7 @@ export default function CheckoutPage() {
           : deliveryAddress.trim();
 
       const order = await checkoutOrder(accessToken, {
+        branchId: selectedBranchId,
         cartItemIds: reorderOrderId ? undefined : selectedItemIds,
         reorderOrderId: reorderOrderId ?? undefined,
         reorderOrderItemIds: reorderOrderId ? selectedItemIds : undefined,
@@ -989,13 +995,10 @@ export default function CheckoutPage() {
               : "mt-5 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-800"
           }
         >
-          <Store
-            size={19}
-            className="mt-0.5 shrink-0"
-          />
+          <Store size={19} className="mt-0.5 shrink-0" />
           <div>
             <p className="text-sm font-bold">
-              Trạng thái nhận đơn
+              Trạng thái nhận đơn · {storeStatus.branch.name}
             </p>
             <p className="mt-1 text-sm leading-6">
               {storeStatus.isOpen
@@ -1020,7 +1023,6 @@ export default function CheckoutPage() {
 
               <h2 className="font-bold text-[#2A211D]">Thông tin nhận hàng</h2>
             </div>
-
             {savedAddresses.length > 0 && (
               <div className="mt-5 rounded-2xl border border-[#E9E1D8] bg-[#FAF8F5] p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1044,45 +1046,30 @@ export default function CheckoutPage() {
 
                 <select
                   value={
-                    selectedSavedAddressId !==
-                    null
-                      ? String(
-                          selectedSavedAddressId,
-                        )
+                    selectedSavedAddressId !== null
+                      ? String(selectedSavedAddressId)
                       : "MANUAL"
                   }
                   onChange={(event) =>
-                    handleSavedAddressSelect(
-                      event.target.value,
-                    )
+                    handleSavedAddressSelect(event.target.value)
                   }
                   className="mt-3 h-12 w-full cursor-pointer rounded-xl border border-[#E9E1D8] bg-white px-4 text-sm outline-none focus:border-[#C9894B]"
                 >
-                  {savedAddresses.map(
-                    (address) => (
-                      <option
-                        key={address.id}
-                        value={address.id}
-                      >
-                        {address.label}
-                        {address.isDefault
-                          ? " · Mặc định"
-                          : ""}
-                        {" · "}
-                        {address.receiverName}
-                        {" · "}
-                        {address.addressLine}
-                      </option>
-                    ),
-                  )}
+                  {savedAddresses.map((address) => (
+                    <option key={address.id} value={address.id}>
+                      {address.label}
+                      {address.isDefault ? " · Mặc định" : ""}
+                      {" · "}
+                      {address.receiverName}
+                      {" · "}
+                      {address.addressLine}
+                    </option>
+                  ))}
 
-                  <option value="MANUAL">
-                    Nhập địa chỉ khác
-                  </option>
+                  <option value="MANUAL">Nhập địa chỉ khác</option>
                 </select>
               </div>
             )}
-
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <div>
                 <label className="mb-2 block text-sm font-medium text-[#5E5650]">
@@ -1098,9 +1085,7 @@ export default function CheckoutPage() {
                   <input
                     value={receiverName}
                     onChange={(event) => {
-                      setReceiverName(
-                        event.target.value,
-                      );
+                      setReceiverName(event.target.value);
                     }}
                     required
                     minLength={2}
@@ -1123,9 +1108,7 @@ export default function CheckoutPage() {
                   <input
                     value={receiverPhone}
                     onChange={(event) => {
-                      setReceiverPhone(
-                        event.target.value,
-                      );
+                      setReceiverPhone(event.target.value);
                     }}
                     required
                     minLength={8}
@@ -1259,6 +1242,31 @@ export default function CheckoutPage() {
               </h2>
             </div>
 
+            <label className="mt-4 block text-sm font-semibold text-[#4A423D]">
+              <span>Chi nhánh phục vụ</span>
+              <select
+                value={selectedBranchId ?? ""}
+                disabled={branchLoading}
+                onChange={(event) =>
+                  void handleBranchChange(event.target.value)
+                }
+                className="mt-2 h-12 w-full cursor-pointer rounded-xl border border-[#E9E1D8] bg-white px-4 text-sm outline-none focus:border-[#C9894B] disabled:cursor-wait disabled:bg-[#FAF8F5]"
+              >
+                {storeLocations.map((location) => (
+                  <option key={location.id} value={location.id}>
+                    {location.code} · {location.name}
+                    {location.isOpen ? "" : " · Chưa sẵn sàng"}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {selectedStoreLocation?.address && (
+              <p className="mt-2 text-xs leading-5 text-[#78866B]">
+                {selectedStoreLocation.address}
+              </p>
+            )}
+
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <button
                 type="button"
@@ -1302,13 +1310,12 @@ export default function CheckoutPage() {
               </p>
             )}
 
-            {storeStatus &&
-              !selectedMethodAvailable &&
-              storeStatus.isOpen && (
-                <p className="mt-3 rounded-xl bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">
-                  Phương thức này đang tạm ngưng. Vui lòng chọn phương thức còn khả dụng.
-                </p>
-              )}
+            {storeStatus && !selectedMethodAvailable && storeStatus.isOpen && (
+              <p className="mt-3 rounded-xl bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">
+                Phương thức này đang tạm ngưng. Vui lòng chọn phương thức còn
+                khả dụng.
+              </p>
+            )}
 
             {fulfillmentMethod === "PICKUP" && (
               <div className="mt-4 rounded-2xl bg-[#FAF8F5] p-4">
@@ -1346,7 +1353,7 @@ export default function CheckoutPage() {
                 />
               ) : (
                 <div className="flex h-48 items-center justify-center px-6 text-center text-sm text-[#8A817B]">
-                  Chưa cấu hình tọa độ cửa hàng trong .env.local.
+                  Chi nhánh chưa cấu hình tọa độ trên trang quản lý chi nhánh.
                 </div>
               )}
             </div>
@@ -1547,12 +1554,13 @@ export default function CheckoutPage() {
 
               <button
                 type="button"
+                disabled={!storeStatus?.bankTransferAvailable}
                 onClick={() => setPaymentMethod("BANK_TRANSFER")}
                 className={`flex items-center gap-3 rounded-xl border p-4 text-left transition ${
                   paymentMethod === "BANK_TRANSFER"
                     ? "border-[#C9894B] bg-[#FFF8F0] ring-1 ring-[#C9894B]"
                     : "border-[#E9E1D8] hover:border-[#D9B38C]"
-                }`}
+                } disabled:cursor-not-allowed disabled:opacity-50`}
               >
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#F3E9DE] text-[#9A5D2E]">
                   <Landmark size={22} />
@@ -1562,7 +1570,9 @@ export default function CheckoutPage() {
                     Chuyển khoản
                   </span>
                   <span className="mt-1 block text-xs text-[#78866B]">
-                    Thanh toán qua ngân hàng
+                    {storeStatus?.bankTransferAvailable
+                      ? "Thanh toán qua ngân hàng"
+                      : "Chi nhánh chưa hỗ trợ"}
                   </span>
                 </span>
               </button>
@@ -1663,13 +1673,12 @@ export default function CheckoutPage() {
               </p>
             )}
 
-            {storeStatus &&
-              !selectedMethodAvailable &&
-              storeStatus.isOpen && (
-                <p className="mt-3 rounded-xl bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">
-                  Phương thức này đang tạm ngưng. Vui lòng chọn phương thức còn khả dụng.
-                </p>
-              )}
+            {storeStatus && !selectedMethodAvailable && storeStatus.isOpen && (
+              <p className="mt-3 rounded-xl bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">
+                Phương thức này đang tạm ngưng. Vui lòng chọn phương thức còn
+                khả dụng.
+              </p>
+            )}
 
             {fulfillmentMethod === "PICKUP" && (
               <div className="flex justify-between">
@@ -1756,22 +1765,36 @@ export default function CheckoutPage() {
           </button>
           {fulfillmentMethod === "DELIVERY" ? (
             <div className="mt-3 rounded-xl bg-[#FAF4EC] px-4 py-3 text-xs leading-5 text-[#7A4B2B]">
-              {subtotal < 300000 ? (
+              {subtotal < firstDeliveryDiscountThreshold ? (
                 <>
-                  Mua thêm <strong>{formatCurrency(300000 - subtotal)}</strong>{" "}
-                  để được giảm 20.000đ phí giao hàng.
+                  Mua thêm{" "}
+                  <strong>
+                    {formatCurrency(firstDeliveryDiscountThreshold - subtotal)}
+                  </strong>{" "}
+                  để được giảm {formatCurrency(firstDeliveryDiscountAmount)} phí
+                  giao hàng.
                 </>
-              ) : subtotal < 500000 ? (
+              ) : subtotal < secondDeliveryDiscountThreshold ? (
                 <>
-                  Mua thêm <strong>{formatCurrency(500000 - subtotal)}</strong>{" "}
-                  để được giảm lên 40.000đ phí giao hàng.
+                  Mua thêm{" "}
+                  <strong>
+                    {formatCurrency(secondDeliveryDiscountThreshold - subtotal)}
+                  </strong>{" "}
+                  để được giảm lên{" "}
+                  {formatCurrency(secondDeliveryDiscountAmount)}
+                  phí giao hàng.
                 </>
               ) : (
-                <>Đơn hàng đã đạt ưu đãi giảm tối đa 40.000đ phí giao hàng.</>
+                <>
+                  Đơn hàng đã đạt ưu đãi giảm tối đa{" "}
+                  {formatCurrency(secondDeliveryDiscountAmount)} phí giao hàng.
+                </>
               )}
               <span className="mt-1 block text-[#8A817B]">
-                Phí cơ bản 15.000đ cho 3 km đầu, thêm 5.000đ/km tiếp theo. Ưu
-                đãi chỉ trừ vào phí giao hàng.
+                Phí cơ bản {formatCurrency(configuredDeliveryBaseFee)} cho{" "}
+                {deliveryBaseDistanceKm} km đầu, thêm{" "}
+                {formatCurrency(deliveryFeePerKm)}/km tiếp theo. Ưu đãi chỉ trừ
+                vào phí giao hàng.
               </span>
             </div>
           ) : (

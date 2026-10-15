@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 
 import BrandLogo from "@/components/brand/brand-logo";
+import HomepageBannerCarousel from "@/components/user/homepage-banner-carousel";
 import { getPublicProducts } from "@/services/menu.service";
 import type { Product } from "@/types/menu";
 
@@ -125,8 +126,8 @@ export default function HomePage() {
             </h1>
 
             <p className="mt-6 max-w-xl text-base leading-7 text-[#6F7C63] sm:text-lg">
-              Thưởng thức cà phê và trà theo cách riêng của bạn. Chọn món,
-              tùy chỉnh hương vị và để Kippora chuẩn bị phần còn lại.
+              Thưởng thức cà phê và trà theo cách riêng của bạn. Chọn món, tùy
+              chỉnh hương vị và để Kippora chuẩn bị phần còn lại.
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">
@@ -177,6 +178,8 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      <HomepageBannerCarousel />
 
       <section className="mx-auto max-w-[1440px] px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
         <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">

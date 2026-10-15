@@ -89,6 +89,7 @@ export class StoreSettingsService {
     if (branchId !== undefined) {
       return this.prisma.storeBranch.findUnique({
         where: { id: branchId },
+        include: { bankAccount: true },
       });
     }
 
@@ -96,23 +97,34 @@ export class StoreSettingsService {
       where: {
         isActive: true,
         isAcceptingOrders: true,
+        address: { not: null },
+        latitude: { not: null },
+        longitude: { not: null },
       },
+      include: { bankAccount: true },
       orderBy: { id: 'asc' },
     });
 
-    return availableBranch ?? this.getOrCreateDefaultBranch();
+    if (availableBranch) {
+      return availableBranch;
+    }
+
+    const defaultBranch = await this.getOrCreateDefaultBranch();
+    return { ...defaultBranch, bankAccount: null };
   }
 
   private serialize(settings: Awaited<ReturnType<typeof this.getOrCreate>>) {
     return {
       ...settings,
       maxDeliveryDistanceKm: Number(settings.maxDeliveryDistanceKm),
+      deliveryBaseDistanceKm: Number(settings.deliveryBaseDistanceKm),
       timeZone: STORE_TIME_ZONE,
     };
   }
 
   private serializeBranch(
     branch: Awaited<ReturnType<typeof this.getOrCreateDefaultBranch>>,
+    bankTransferAvailable = false,
   ) {
     return {
       id: branch.id,
@@ -120,15 +132,32 @@ export class StoreSettingsService {
       name: branch.name,
       address: branch.address,
       phone: branch.phone,
+      latitude: branch.latitude === null ? null : Number(branch.latitude),
+      longitude: branch.longitude === null ? null : Number(branch.longitude),
       openedAt: branch.openedAt ?? null,
       staffCount: 0,
       activeStaffCount: 0,
       isActive: branch.isActive,
       isAcceptingOrders: branch.isAcceptingOrders,
+      bankTransferAvailable,
       pauseReason: branch.pauseReason,
       createdAt: branch.createdAt,
       updatedAt: branch.updatedAt,
     };
+  }
+
+  private assertCompleteCoordinates(
+    latitude: number | null | undefined,
+    longitude: number | null | undefined,
+  ) {
+    const hasLatitude = latitude !== null && latitude !== undefined;
+    const hasLongitude = longitude !== null && longitude !== undefined;
+
+    if (hasLatitude !== hasLongitude) {
+      throw new BadRequestException(
+        'Vui lòng nhập đầy đủ cả vĩ độ và kinh độ của chi nhánh',
+      );
+    }
   }
 
   private async getBranchById(id: number) {
@@ -147,6 +176,67 @@ export class StoreSettingsService {
     const settings = await this.getOrCreate();
 
     return this.serialize(settings);
+  }
+
+  // Danh sách điểm bán công khai lấy trực tiếp từ chi nhánh đang hoạt động.
+  async getLocations() {
+    await this.getOrCreateDefaultBranch();
+
+    const [settings, branches] = await Promise.all([
+      this.getOrCreate(),
+      this.prisma.storeBranch.findMany({
+        where: { isActive: true },
+        include: { bankAccount: true },
+        orderBy: [{ code: 'asc' }, { id: 'asc' }],
+      }),
+    ]);
+    const withinOpeningHours = this.isWithinOpeningHours(
+      settings.openingTime,
+      settings.closingTime,
+    );
+
+    return branches.map((branch) => {
+      const branchAccepting =
+        settings.isAcceptingOrders && branch.isAcceptingOrders;
+      const locationReady = Boolean(
+        branch.address && branch.latitude !== null && branch.longitude !== null,
+      );
+      const isOpen = withinOpeningHours && branchAccepting && locationReady;
+      let unavailableReason: string | null = null;
+
+      if (!settings.isAcceptingOrders) {
+        unavailableReason =
+          settings.pauseReason?.trim() || 'Hệ thống đang tạm ngưng hoạt động.';
+      } else if (!withinOpeningHours) {
+        unavailableReason = `Ngoài giờ phục vụ ${settings.openingTime} - ${settings.closingTime}.`;
+      } else if (!branch.isAcceptingOrders) {
+        unavailableReason =
+          branch.pauseReason?.trim() || 'Chi nhánh đang tạm ngưng nhận đơn.';
+      } else if (!locationReady) {
+        unavailableReason =
+          'Chi nhánh chưa cấu hình đầy đủ địa chỉ và tọa độ nhận đơn.';
+      }
+
+      return {
+        id: branch.id,
+        code: branch.code,
+        name: branch.name,
+        address: branch.address,
+        phone: branch.phone,
+        latitude: branch.latitude === null ? null : Number(branch.latitude),
+        longitude: branch.longitude === null ? null : Number(branch.longitude),
+        isOpen,
+        isAcceptingOrders: branchAccepting,
+        openingTime: settings.openingTime,
+        closingTime: settings.closingTime,
+        preparationMinutes: settings.preparationMinutes,
+        deliveryAvailable: isOpen && settings.deliveryEnabled,
+        pickupAvailable: isOpen && settings.pickupEnabled,
+        bankTransferAvailable: Boolean(branch.bankAccount?.isActive),
+        unavailableReason,
+        timeZone: STORE_TIME_ZONE,
+      };
+    });
   }
 
   // Admin xem toàn bộ chi nhánh để chuẩn bị cho luồng quản lý nhiều chi nhánh.
@@ -187,6 +277,11 @@ export class StoreSettingsService {
   }
 
   async createBranch(createBranchDto: CreateBranchDto) {
+    this.assertCompleteCoordinates(
+      createBranchDto.latitude,
+      createBranchDto.longitude,
+    );
+
     const existing = await this.prisma.storeBranch.findUnique({
       where: { code: createBranchDto.code },
     });
@@ -201,6 +296,8 @@ export class StoreSettingsService {
         name: createBranchDto.name,
         address: createBranchDto.address ?? null,
         phone: createBranchDto.phone ?? null,
+        latitude: createBranchDto.latitude ?? null,
+        longitude: createBranchDto.longitude ?? null,
         openedAt: createBranchDto.openedAt
           ? new Date(createBranchDto.openedAt)
           : null,
@@ -212,6 +309,16 @@ export class StoreSettingsService {
 
   async updateBranch(id: number, updateBranchDto: UpdateBranchDto) {
     await this.getBranchById(id);
+    const coordinatesWereUpdated =
+      updateBranchDto.latitude !== undefined ||
+      updateBranchDto.longitude !== undefined;
+
+    if (coordinatesWereUpdated) {
+      this.assertCompleteCoordinates(
+        updateBranchDto.latitude,
+        updateBranchDto.longitude,
+      );
+    }
 
     const branch = await this.prisma.storeBranch.update({
       where: { id },
@@ -224,6 +331,12 @@ export class StoreSettingsService {
           : {}),
         ...(updateBranchDto.phone !== undefined
           ? { phone: updateBranchDto.phone }
+          : {}),
+        ...(updateBranchDto.latitude !== undefined
+          ? { latitude: updateBranchDto.latitude }
+          : {}),
+        ...(updateBranchDto.longitude !== undefined
+          ? { longitude: updateBranchDto.longitude }
           : {}),
         ...(updateBranchDto.openedAt !== undefined
           ? {
@@ -268,7 +381,11 @@ export class StoreSettingsService {
   private async getStaffBranch(userId: number) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { staffProfile: { select: { branch: true } } },
+      select: {
+        staffProfile: {
+          select: { branch: { include: { bankAccount: true } } },
+        },
+      },
     });
 
     if (!user?.staffProfile?.branch) {
@@ -281,7 +398,7 @@ export class StoreSettingsService {
   async getBranchStatus(userId: number) {
     const branch = await this.getStaffBranch(userId);
 
-    return this.serializeBranch(branch);
+    return this.serializeBranch(branch, Boolean(branch.bankAccount?.isActive));
   }
 
   async updateBranchStatus(
@@ -305,9 +422,10 @@ export class StoreSettingsService {
           : updateAcceptingOrdersDto.pauseReason?.trim() ||
             'Chi nhánh đang tạm ngưng nhận đơn.',
       },
+      include: { bankAccount: true },
     });
 
-    return this.serializeBranch(branch);
+    return this.serializeBranch(branch, Boolean(branch.bankAccount?.isActive));
   }
 
   async getStatus(branchId?: number) {
@@ -327,7 +445,11 @@ export class StoreSettingsService {
     const isSystemActive = settings.isAcceptingOrders;
     const isBranchAcceptingOrders = branch.isActive && branch.isAcceptingOrders;
     const isAcceptingOrders = isSystemActive && isBranchAcceptingOrders;
-    const acceptingOrders = withinOpeningHours && isAcceptingOrders;
+    const locationReady = Boolean(
+      branch.address && branch.latitude !== null && branch.longitude !== null,
+    );
+    const acceptingOrders =
+      withinOpeningHours && isAcceptingOrders && locationReady;
 
     let unavailableReason: string | null = null;
     let unavailableScope: 'SYSTEM' | 'BRANCH' | 'HOURS' | 'FULFILLMENT' | null =
@@ -344,6 +466,10 @@ export class StoreSettingsService {
       unavailableScope = 'BRANCH';
       unavailableReason =
         branch.pauseReason?.trim() || 'Chi nhánh đang tạm ngưng nhận đơn.';
+    } else if (!locationReady) {
+      unavailableScope = 'FULFILLMENT';
+      unavailableReason =
+        'Chi nhánh chưa cấu hình đầy đủ địa chỉ và tọa độ nhận đơn.';
     } else if (!settings.deliveryEnabled && !settings.pickupEnabled) {
       unavailableScope = 'FULFILLMENT';
       unavailableReason = 'Cửa hàng chưa mở phương thức nhận hàng.';
@@ -359,16 +485,50 @@ export class StoreSettingsService {
         id: branch.id,
         code: branch.code,
         name: branch.name,
+        address: branch.address,
+        phone: branch.phone,
+        latitude: branch.latitude === null ? null : Number(branch.latitude),
+        longitude: branch.longitude === null ? null : Number(branch.longitude),
       },
       deliveryAvailable: acceptingOrders && settings.deliveryEnabled,
       pickupAvailable: acceptingOrders && settings.pickupEnabled,
+      bankTransferAvailable: Boolean(branch.bankAccount?.isActive),
       openingTime: settings.openingTime,
       closingTime: settings.closingTime,
       preparationMinutes: settings.preparationMinutes,
       maxDeliveryDistanceKm: Number(settings.maxDeliveryDistanceKm),
+      deliveryBaseDistanceKm: Number(settings.deliveryBaseDistanceKm),
+      deliveryBaseFee: settings.deliveryBaseFee,
+      deliveryFeePerKm: settings.deliveryFeePerKm,
+      deliveryDiscountFirstThreshold: settings.deliveryDiscountFirstThreshold,
+      deliveryDiscountFirstAmount: settings.deliveryDiscountFirstAmount,
+      deliveryDiscountSecondThreshold: settings.deliveryDiscountSecondThreshold,
+      deliveryDiscountSecondAmount: settings.deliveryDiscountSecondAmount,
       unavailableReason,
       unavailableScope,
       timeZone: STORE_TIME_ZONE,
+    };
+  }
+
+  async calculateDeliveryPricing(distanceKm: number, subtotal: number) {
+    const settings = await this.getOrCreate();
+    const baseDistanceKm = Number(settings.deliveryBaseDistanceKm);
+    const deliveryBaseFee =
+      settings.deliveryBaseFee +
+      Math.max(0, Math.ceil(distanceKm - baseDistanceKm)) *
+        settings.deliveryFeePerKm;
+    const requestedDiscount =
+      subtotal >= settings.deliveryDiscountSecondThreshold
+        ? settings.deliveryDiscountSecondAmount
+        : subtotal >= settings.deliveryDiscountFirstThreshold
+          ? settings.deliveryDiscountFirstAmount
+          : 0;
+    const deliveryDiscountAmount = Math.min(requestedDiscount, deliveryBaseFee);
+
+    return {
+      deliveryBaseFee,
+      deliveryDiscountAmount,
+      deliveryFee: deliveryBaseFee - deliveryDiscountAmount,
     };
   }
 
@@ -383,6 +543,45 @@ export class StoreSettingsService {
     if (!deliveryEnabled && !pickupEnabled) {
       throw new BadRequestException(
         'Phải bật ít nhất một phương thức nhận hàng',
+      );
+    }
+
+    const maxDeliveryDistanceKm = Number(
+      updateStoreSettingsDto.maxDeliveryDistanceKm ??
+        current.maxDeliveryDistanceKm,
+    );
+    const deliveryBaseDistanceKm = Number(
+      updateStoreSettingsDto.deliveryBaseDistanceKm ??
+        current.deliveryBaseDistanceKm,
+    );
+    const firstThreshold =
+      updateStoreSettingsDto.deliveryDiscountFirstThreshold ??
+      current.deliveryDiscountFirstThreshold;
+    const secondThreshold =
+      updateStoreSettingsDto.deliveryDiscountSecondThreshold ??
+      current.deliveryDiscountSecondThreshold;
+    const firstAmount =
+      updateStoreSettingsDto.deliveryDiscountFirstAmount ??
+      current.deliveryDiscountFirstAmount;
+    const secondAmount =
+      updateStoreSettingsDto.deliveryDiscountSecondAmount ??
+      current.deliveryDiscountSecondAmount;
+
+    if (deliveryBaseDistanceKm > maxDeliveryDistanceKm) {
+      throw new BadRequestException(
+        'Quãng đường tính phí cơ bản không được lớn hơn bán kính giao hàng tối đa',
+      );
+    }
+
+    if (secondThreshold <= firstThreshold) {
+      throw new BadRequestException(
+        'Mốc ưu đãi thứ hai phải lớn hơn mốc ưu đãi thứ nhất',
+      );
+    }
+
+    if (secondAmount < firstAmount) {
+      throw new BadRequestException(
+        'Mức giảm thứ hai không được thấp hơn mức giảm thứ nhất',
       );
     }
 
@@ -428,6 +627,7 @@ export class StoreSettingsService {
     fulfillmentMethod: 'DELIVERY' | 'PICKUP',
     deliveryDistanceKm?: number,
     branchId?: number,
+    paymentMethod?: 'COD' | 'BANK_TRANSFER',
   ) {
     const status = await this.getStatus(branchId);
 
@@ -444,6 +644,12 @@ export class StoreSettingsService {
     if (fulfillmentMethod === 'PICKUP' && !status.pickupAvailable) {
       throw new BadRequestException(
         'Cửa hàng đang tạm ngưng nhận đơn tại quán',
+      );
+    }
+
+    if (paymentMethod === 'BANK_TRANSFER' && !status.bankTransferAvailable) {
+      throw new BadRequestException(
+        'Chi nhánh chưa cấu hình tài khoản nhận chuyển khoản',
       );
     }
 

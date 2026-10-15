@@ -142,6 +142,17 @@ export default function NotificationBell() {
     setOpen(false);
     if (notification.actionUrl) {
       router.push(notification.actionUrl);
+    } else if (
+      ["SUPPORT_NEW_MESSAGE", "SUPPORT_TRANSFERRED"].includes(notification.type)
+    ) {
+      const storedUser = sessionStorage.getItem("user");
+      let role = "STAFF";
+      try {
+        role = storedUser ? JSON.parse(storedUser).role : "STAFF";
+      } catch {}
+      router.push(role === "ADMIN" ? "/admin/chat" : "/staff/chat");
+    } else if (notification.type === "SUPPORT_REPLY") {
+      router.push("/ho-tro");
     } else if (notification.type.startsWith("MONTH_CLOSE_")) {
       const storedUser = sessionStorage.getItem("user");
       let role = "BRANCH_MANAGER";

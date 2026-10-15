@@ -1,6 +1,7 @@
 "use client";
 
 import { Power, Store } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import {
@@ -14,6 +15,7 @@ export default function SystemAvailabilityBoundary({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const pathname = usePathname();
   const [status, setStatus] = useState<StoreStatus | null>(null);
   const [loaded, setLoaded] = useState(false);
 
@@ -56,13 +58,16 @@ export default function SystemAvailabilityBoundary({
   if (!loaded) {
     return (
       <div className="flex min-h-[65vh] items-center justify-center">
-        <p className="text-sm text-[#78866B]">Đang kiểm tra trạng thái hệ thống...</p>
+        <p className="text-sm text-[#78866B]">
+          Đang kiểm tra trạng thái hệ thống...
+        </p>
       </div>
     );
   }
 
   // Chỉ Admin đóng cấp hệ thống mới thay toàn bộ nội dung phía User.
-  if (status && !status.isSystemActive) {
+  // Kênh CSKH phải luôn truy cập được, kể cả khi Admin tạm dừng nhận đơn.
+  if (status && !status.isSystemActive && !pathname.startsWith("/ho-tro")) {
     return (
       <section className="flex min-h-[70vh] items-center justify-center px-4 py-12">
         <div className="w-full max-w-xl rounded-3xl border border-[#E9E1D8] bg-white p-8 text-center shadow-sm sm:p-12">

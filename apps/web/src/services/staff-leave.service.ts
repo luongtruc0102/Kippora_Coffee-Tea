@@ -195,3 +195,42 @@ export async function uploadLeaveEvidence(accessToken: string, file: File) {
     "Không thể tải minh chứng",
   );
 }
+
+/** Mở file riêng tư bằng Access Token thay vì để trình duyệt truy cập URL công khai. */
+export async function openLeaveEvidence(
+  accessToken: string,
+  evidenceUrl: string,
+) {
+  const previewWindow = window.open("", "_blank");
+  if (previewWindow) {
+    previewWindow.opener = null;
+    previewWindow.document.title = "Đang tải minh chứng...";
+    previewWindow.document.body.textContent = "Đang tải minh chứng...";
+  }
+
+  try {
+    const response = await fetch(evidenceUrl, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => null);
+      throw new Error(data?.message || "Không thể mở minh chứng");
+    }
+
+    const objectUrl = URL.createObjectURL(await response.blob());
+    if (previewWindow) {
+      previewWindow.location.replace(objectUrl);
+    } else {
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.target = "_blank";
+      link.rel = "noreferrer";
+      link.click();
+    }
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 5 * 60 * 1000);
+  } catch (error) {
+    previewWindow?.close();
+    throw error;
+  }
+}

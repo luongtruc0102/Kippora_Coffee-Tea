@@ -51,6 +51,7 @@ export class OrdersController {
   ) {
     return this.ordersService.searchAddressSuggestions(
       addressSuggestionsDto.query,
+      addressSuggestionsDto.branchId,
     );
   }
 

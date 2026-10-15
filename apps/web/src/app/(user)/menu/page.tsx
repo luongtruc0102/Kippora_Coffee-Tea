@@ -4,7 +4,15 @@ import Image from "next/image";
 
 import { useEffect, useMemo, useState } from "react";
 
-import { Coffee, LoaderCircle, Search, Star, Heart } from "lucide-react";
+import {
+  Coffee,
+  LoaderCircle,
+  Search,
+  Star,
+  Heart,
+  TicketPercent,
+  X,
+} from "lucide-react";
 
 import {
   getPublicCategories,
@@ -42,23 +50,14 @@ export default function MenuPage() {
   );
 
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [bannerVoucherCode, setBannerVoucherCode] = useState("");
 
-  const [
-    reviewSummaries,
-    setReviewSummaries,
-  ] = useState<
-    Record<
-      number,
-      ProductReviewSummary
-    >
+  const [reviewSummaries, setReviewSummaries] = useState<
+    Record<number, ProductReviewSummary>
   >({});
 
-  const {
-    loadingFavorites,
-    updatingProductId,
-    isFavorite,
-    toggleFavorite,
-  } = useFavorites();
+  const { loadingFavorites, updatingProductId, isFavorite, toggleFavorite } =
+    useFavorites();
 
   useEffect(() => {
     async function loadMenu() {
@@ -66,15 +65,12 @@ export default function MenuPage() {
         setLoading(true);
         setError("");
 
-        const [
-          categoryData,
-          productData,
-          reviewSummaryData,
-        ] = await Promise.all([
-          getPublicCategories(),
-          getPublicProducts(),
-          getProductReviewSummaries(),
-        ]);
+        const [categoryData, productData, reviewSummaryData] =
+          await Promise.all([
+            getPublicCategories(),
+            getPublicProducts(),
+            getProductReviewSummaries(),
+          ]);
 
         setCategories(categoryData);
         setProducts(productData);
@@ -82,12 +78,7 @@ export default function MenuPage() {
 
         setReviewSummaries(
           Object.fromEntries(
-            reviewSummaryData.map(
-              (summary) => [
-                summary.productId,
-                summary,
-              ],
-            ),
+            reviewSummaryData.map((summary) => [summary.productId, summary]),
           ),
         );
       } catch (error) {
@@ -99,6 +90,22 @@ export default function MenuPage() {
 
     loadMenu();
   }, []);
+
+  // Banner có thể mở thẳng món được quảng bá hoặc nhắc mã voucher cần dùng.
+  useEffect(() => {
+    if (loading) return;
+    const timeoutId = window.setTimeout(() => {
+      const params = new URLSearchParams(window.location.search);
+      const productId = Number(params.get("productId"));
+      if (Number.isInteger(productId) && productId > 0) {
+        const linkedProduct = allProducts.find((item) => item.id === productId);
+        if (linkedProduct) setSelectedProduct(linkedProduct);
+      }
+      const voucher = params.get("voucher")?.trim();
+      if (voucher) setBannerVoucherCode(voucher.toUpperCase());
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [allProducts, loading]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -271,6 +278,28 @@ export default function MenuPage() {
 
       <ToastMessage message={displayedError} />
 
+      {bannerVoucherCode && (
+        <div className="mt-5 flex items-center justify-between gap-4 rounded-2xl border border-[#F0D29C] bg-[#FFF8E8] px-4 py-3 text-sm text-[#714817]">
+          <div className="flex items-center gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-[#B56C19]">
+              <TicketPercent size={18} />
+            </span>
+            <p>
+              Dùng mã <strong>{bannerVoucherCode}</strong> ở bước thanh toán để
+              nhận ưu đãi.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setBannerVoucherCode("")}
+            aria-label="Ẩn thông báo voucher"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg hover:bg-white"
+          >
+            <X size={17} />
+          </button>
+        </div>
+      )}
+
       {loading ? (
         <div className="py-16 text-center text-sm text-[#78866B]">
           Đang tải menu...
@@ -290,7 +319,7 @@ export default function MenuPage() {
 
             const imageUrl = getProductImageUrl(product.imageUrl);
 
-            const reviewSummary = reviewSummaries[ product.id ];
+            const reviewSummary = reviewSummaries[product.id];
 
             return (
               <article
@@ -300,10 +329,7 @@ export default function MenuPage() {
                 <div className="relative aspect-square overflow-hidden bg-[#F3E9DE] sm:aspect-[4/3]">
                   <button
                     type="button"
-                    disabled={
-                      loadingFavorites ||
-                      updatingProductId !== null
-                    }
+                    disabled={loadingFavorites || updatingProductId !== null}
                     aria-label={
                       isFavorite(product.id)
                         ? `Bỏ yêu thích ${product.name}`
@@ -314,11 +340,7 @@ export default function MenuPage() {
                         ? "Bỏ yêu thích"
                         : "Thêm vào yêu thích"
                     }
-                    onClick={() =>
-                      void toggleFavorite(
-                        product.id,
-                      )
-                    }
+                    onClick={() => void toggleFavorite(product.id)}
                     className={`absolute right-3 top-3 z-10 flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border shadow-sm backdrop-blur transition disabled:cursor-wait disabled:opacity-60 ${
                       isFavorite(product.id)
                         ? "border-[#E7A35B] bg-[#FFF4E8] text-[#D9772B]"
@@ -327,11 +349,7 @@ export default function MenuPage() {
                   >
                     <Heart
                       size={20}
-                      className={
-                        isFavorite(product.id)
-                          ? "fill-current"
-                          : ""
-                      }
+                      className={isFavorite(product.id) ? "fill-current" : ""}
                     />
                   </button>
                   {imageUrl ? (
@@ -372,21 +390,15 @@ export default function MenuPage() {
                     {reviewSummary ? (
                       <>
                         <span className="font-bold text-[#4A2C20]">
-                          {
-                            reviewSummary.averageRating
-                          }
+                          {reviewSummary.averageRating}
                         </span>
 
                         <span className="text-[#8A817B]">
-                          ({
-                            reviewSummary.reviewCount
-                          } đánh giá)
+                          ({reviewSummary.reviewCount} đánh giá)
                         </span>
                       </>
                     ) : (
-                      <span className="text-[#8A817B]">
-                        Chưa có đánh giá
-                      </span>
+                      <span className="text-[#8A817B]">Chưa có đánh giá</span>
                     )}
                   </div>
 
@@ -426,32 +438,19 @@ export default function MenuPage() {
       <ProductOrderModal
         open={selectedProduct !== null}
         product={selectedProduct}
-        isFavorite={
-          selectedProduct
-            ? isFavorite(
-                selectedProduct.id,
-              )
-            : false
-        }
+        isFavorite={selectedProduct ? isFavorite(selectedProduct.id) : false}
         favoriteUpdating={
           loadingFavorites ||
-          (selectedProduct
-            ? updatingProductId ===
-              selectedProduct.id
-            : false)
+          (selectedProduct ? updatingProductId === selectedProduct.id : false)
         }
         onToggleFavorite={() => {
           if (!selectedProduct) {
             return;
           }
 
-          void toggleFavorite(
-            selectedProduct.id,
-          );
+          void toggleFavorite(selectedProduct.id);
         }}
-        onClose={() =>
-          setSelectedProduct(null)
-        }
+        onClose={() => setSelectedProduct(null)}
       />
     </div>
   );

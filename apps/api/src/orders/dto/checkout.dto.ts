@@ -15,6 +15,11 @@ import {
 
 // Kiểm tra thông tin khi người dùng checkout
 export class CheckoutDto {
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  branchId?: number;
+
   // Checkout thường truyền các CartItem khách đã chọn.
   @IsOptional()
   @IsArray()

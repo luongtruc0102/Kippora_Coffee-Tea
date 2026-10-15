@@ -20,6 +20,7 @@ import { useAppToast } from "@/components/ui/app-toast-provider";
 import {
   cancelStaffLeave,
   getMyLeaveSchedule,
+  openLeaveEvidence,
   respondShiftCoverage,
 } from "@/services/staff-leave.service";
 import type {
@@ -212,6 +213,21 @@ export default function WorkSchedulePage() {
       );
     } finally {
       setRespondingCoverageId(null);
+    }
+  }
+
+  async function viewEvidence(evidenceUrl: string) {
+    const accessToken = sessionStorage.getItem("accessToken");
+    if (!accessToken) return;
+    try {
+      await openLeaveEvidence(accessToken, evidenceUrl);
+    } catch (viewError) {
+      showToast(
+        viewError instanceof Error
+          ? viewError.message
+          : "Không thể mở minh chứng",
+        "error",
+      );
     }
   }
 
@@ -474,14 +490,13 @@ export default function WorkSchedulePage() {
                       </p>
                     )}
                     {request.evidenceUrl && (
-                      <a
-                        href={request.evidenceUrl}
-                        target="_blank"
-                        rel="noreferrer"
+                      <button
+                        type="button"
+                        onClick={() => void viewEvidence(request.evidenceUrl!)}
                         className="mt-3 inline-flex items-center gap-1.5 font-semibold text-[#C2763D] hover:underline"
                       >
                         Xem minh chứng <ExternalLink size={14} />
-                      </a>
+                      </button>
                     )}
                   </div>
                 )}

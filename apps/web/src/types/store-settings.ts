@@ -7,6 +7,13 @@ export type StoreSettings = {
   closingTime: string;
   preparationMinutes: number;
   maxDeliveryDistanceKm: number;
+  deliveryBaseDistanceKm: number;
+  deliveryBaseFee: number;
+  deliveryFeePerKm: number;
+  deliveryDiscountFirstThreshold: number;
+  deliveryDiscountFirstAmount: number;
+  deliveryDiscountSecondThreshold: number;
+  deliveryDiscountSecondAmount: number;
   pauseReason: string | null;
   timeZone: string;
   createdAt: string;
@@ -23,13 +30,25 @@ export type StoreStatus = {
     id: number;
     code: string;
     name: string;
+    address: string | null;
+    phone: string | null;
+    latitude: number | null;
+    longitude: number | null;
   };
   deliveryAvailable: boolean;
   pickupAvailable: boolean;
+  bankTransferAvailable: boolean;
   openingTime: string;
   closingTime: string;
   preparationMinutes: number;
   maxDeliveryDistanceKm: number;
+  deliveryBaseDistanceKm: number;
+  deliveryBaseFee: number;
+  deliveryFeePerKm: number;
+  deliveryDiscountFirstThreshold: number;
+  deliveryDiscountFirstAmount: number;
+  deliveryDiscountSecondThreshold: number;
+  deliveryDiscountSecondAmount: number;
   unavailableReason: string | null;
   unavailableScope: "SYSTEM" | "BRANCH" | "HOURS" | "FULFILLMENT" | null;
   timeZone: string;
@@ -41,9 +60,12 @@ export type BranchStatus = {
   name: string;
   address: string | null;
   phone: string | null;
+  latitude: number | null;
+  longitude: number | null;
   openedAt: string | null;
   isActive: boolean;
   isAcceptingOrders: boolean;
+  bankTransferAvailable: boolean;
   pauseReason: string | null;
   createdAt: string;
   updatedAt: string;
@@ -63,6 +85,8 @@ export type CreateBranchInput = {
   name: string;
   address?: string;
   phone?: string;
+  latitude?: number;
+  longitude?: number;
   openedAt?: string;
 };
 
@@ -70,7 +94,29 @@ export type UpdateBranchInput = {
   name?: string;
   address?: string | null;
   phone?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   openedAt?: string | null;
+};
+
+export type PublicStoreLocation = {
+  id: number;
+  code: string;
+  name: string;
+  address: string | null;
+  phone: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  isOpen: boolean;
+  isAcceptingOrders: boolean;
+  openingTime: string;
+  closingTime: string;
+  preparationMinutes: number;
+  deliveryAvailable: boolean;
+  pickupAvailable: boolean;
+  bankTransferAvailable: boolean;
+  unavailableReason: string | null;
+  timeZone: string;
 };
 
 export type UpdateStoreSettingsInput = {
@@ -81,5 +127,12 @@ export type UpdateStoreSettingsInput = {
   closingTime?: string;
   preparationMinutes?: number;
   maxDeliveryDistanceKm?: number;
+  deliveryBaseDistanceKm?: number;
+  deliveryBaseFee?: number;
+  deliveryFeePerKm?: number;
+  deliveryDiscountFirstThreshold?: number;
+  deliveryDiscountFirstAmount?: number;
+  deliveryDiscountSecondThreshold?: number;
+  deliveryDiscountSecondAmount?: number;
   pauseReason?: string | null;
 };

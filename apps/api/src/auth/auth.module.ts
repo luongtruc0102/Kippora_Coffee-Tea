@@ -4,6 +4,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { UsersModule } from '../users/users.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { getAuthSessionTtlSeconds } from './auth-session.config';
+import { PasswordResetMailService } from './password-reset-mail.service';
 
 @Module({
   imports: [
@@ -16,13 +18,15 @@ import { AuthService } from './auth.service';
       useFactory: (configService: ConfigService) => ({
         secret: configService.get<string>('JWT_SECRET'),
         signOptions: {
-          expiresIn: '1h',
+          expiresIn: getAuthSessionTtlSeconds(
+            configService.get<string>('AUTH_SESSION_TTL_HOURS'),
+          ),
         },
       }),
     }),
   ],
 
-  providers: [AuthService],
+  providers: [AuthService, PasswordResetMailService],
 
   controllers: [AuthController],
 

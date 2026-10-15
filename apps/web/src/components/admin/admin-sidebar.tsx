@@ -14,6 +14,7 @@ import {
   Calculator,
   Coffee,
   CreditCard,
+  FileText,
   Images,
   HandCoins,
   LayoutDashboard,
@@ -205,7 +206,7 @@ const menuGroups = [
         icon: Star,
       },
       {
-        label: "Chat / CSKH",
+        label: "Giám sát CSKH",
         href: "/admin/chat",
         icon: MessagesSquare,
       },
@@ -216,6 +217,11 @@ const menuGroups = [
     label: "Nội dung",
 
     items: [
+      {
+        label: "Trang nội dung",
+        href: "/admin/content-pages",
+        icon: FileText,
+      },
       {
         label: "Banner",
         href: "/admin/banners",

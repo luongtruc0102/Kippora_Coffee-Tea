@@ -19,66 +19,102 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 function getApiUrl() {
   if (!API_URL) {
-    throw new Error(
-      'Thiếu NEXT_PUBLIC_API_URL trong .env.local',
-    );
+    throw new Error("Thiếu NEXT_PUBLIC_API_URL trong .env.local");
   }
 
   return API_URL;
 }
 
 // Đăng nhập và lấy JWT từ backend
-export async function login(
-  payload: LoginPayload,
-): Promise<LoginResponse> {
-  const response = await fetch(
-    `${getApiUrl()}/auth/login`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
+export async function login(payload: LoginPayload): Promise<LoginResponse> {
+  const response = await fetch(`${getApiUrl()}/auth/login`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
     },
-  );
+    body: JSON.stringify(payload),
+  });
 
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(
-      data.message || 'Đăng nhập thất bại',
-    );
+    throw new Error(data.message || "Đăng nhập thất bại");
   }
 
   return data;
+}
+
+/** Thu hồi phiên hiện tại ở backend. Giao diện vẫn tự xóa dữ liệu cục bộ nếu mất mạng. */
+export async function logout(accessToken: string): Promise<void> {
+  const response = await fetch(`${getApiUrl()}/auth/logout`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok && response.status !== 401) {
+    const data = await response.json().catch(() => null);
+    throw new Error(data?.message || "Không thể kết thúc phiên đăng nhập");
+  }
+}
+
+export async function requestPasswordReset(email: string) {
+  const response = await fetch(`${getApiUrl()}/auth/forgot-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message = Array.isArray(data?.message)
+      ? data.message.join(", ")
+      : data?.message;
+    throw new Error(message || "Chưa thể gửi mã OTP");
+  }
+  return data as { message: string };
+}
+
+export async function resetForgottenPassword(input: {
+  email: string;
+  otp: string;
+  newPassword: string;
+}) {
+  const response = await fetch(`${getApiUrl()}/auth/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message = Array.isArray(data?.message)
+      ? data.message.join(", ")
+      : data?.message;
+    throw new Error(message || "Không thể đặt lại mật khẩu");
+  }
+  return data as { message: string };
 }
 
 // Đăng ký tài khoản USER mới
 export async function register(
   payload: RegisterPayload,
 ): Promise<RegisterResponse> {
-  const response = await fetch(
-    `${getApiUrl()}/auth/register`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
+  const response = await fetch(`${getApiUrl()}/auth/register`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
     },
-  );
+    body: JSON.stringify(payload),
+  });
 
   const data = await response.json();
 
   if (!response.ok) {
-    const message =
-      Array.isArray(data.message)
-        ? data.message.join(', ')
-        : data.message;
+    const message = Array.isArray(data.message)
+      ? data.message.join(", ")
+      : data.message;
 
-    throw new Error(
-      message || 'Đăng ký tài khoản thất bại',
-    );
+    throw new Error(message || "Đăng ký tài khoản thất bại");
   }
 
   return data;
@@ -100,29 +136,19 @@ export type CurrentUser = {
   createdAt: string;
 };
 
-export async function getMe(
-  accessToken: string,
-): Promise<CurrentUser> {
-  const response = await fetch(
-    `${getApiUrl()}/auth/me`,
-    {
-      headers: {
-        Authorization:
-          `Bearer ${accessToken}`,
-      },
-
-      cache: 'no-store',
+export async function getMe(accessToken: string): Promise<CurrentUser> {
+  const response = await fetch(`${getApiUrl()}/auth/me`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
     },
-  );
 
-  const data =
-    await response.json();
+    cache: "no-store",
+  });
+
+  const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(
-      data.message ||
-        'Không thể tải thông tin tài khoản',
-    );
+    throw new Error(data.message || "Không thể tải thông tin tài khoản");
   }
 
   return data;
@@ -154,41 +180,26 @@ export async function updateProfile(
   accessToken: string,
   input: UpdateProfileInput,
 ): Promise<CurrentUser> {
-  const response = await fetch(
-    `${getApiUrl()}/auth/me`,
-    {
-      method: 'PATCH',
+  const response = await fetch(`${getApiUrl()}/auth/me`, {
+    method: "PATCH",
 
-      headers: {
-        'Content-Type':
-          'application/json',
+    headers: {
+      "Content-Type": "application/json",
 
-        Authorization:
-          `Bearer ${accessToken}`,
-      },
-
-      body:
-        JSON.stringify(input),
+      Authorization: `Bearer ${accessToken}`,
     },
-  );
 
-  const data =
-    await response
-      .json()
-      .catch(() => null);
+    body: JSON.stringify(input),
+  });
+
+  const data = await response.json().catch(() => null);
 
   if (!response.ok) {
-    const message =
-      Array.isArray(
-        data?.message,
-      )
-        ? data.message.join(', ')
-        : data?.message;
+    const message = Array.isArray(data?.message)
+      ? data.message.join(", ")
+      : data?.message;
 
-    throw new Error(
-      message ||
-        'Không thể cập nhật hồ sơ',
-    );
+    throw new Error(message || "Không thể cập nhật hồ sơ");
   }
 
   return data;
@@ -211,35 +222,25 @@ export async function changePassword(
   accessToken: string,
   input: ChangePasswordInput,
 ): Promise<ChangePasswordResponse> {
-  const response = await fetch(
-    `${getApiUrl()}/auth/change-password`,
-    {
-      method: 'PATCH',
+  const response = await fetch(`${getApiUrl()}/auth/change-password`, {
+    method: "PATCH",
 
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-      },
-
-      body: JSON.stringify(input),
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
     },
-  );
 
-  const data = await response
-    .json()
-    .catch(() => null);
+    body: JSON.stringify(input),
+  });
+
+  const data = await response.json().catch(() => null);
 
   if (!response.ok) {
-    const message = Array.isArray(
-      data?.message,
-    )
-      ? data.message.join(', ')
+    const message = Array.isArray(data?.message)
+      ? data.message.join(", ")
       : data?.message;
 
-    throw new Error(
-      message ||
-        'Không thể đổi mật khẩu',
-    );
+    throw new Error(message || "Không thể đổi mật khẩu");
   }
 
   return data;

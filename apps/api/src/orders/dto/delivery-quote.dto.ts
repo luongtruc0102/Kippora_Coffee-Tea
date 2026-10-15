@@ -1,5 +1,6 @@
 import {
   IsIn,
+  IsInt,
   IsNumber,
   IsOptional,
   IsString,
@@ -19,4 +20,9 @@ export class DeliveryQuoteDto {
   @IsOptional()
   @IsIn(['DELIVERY', 'PICKUP'])
   fulfillmentMethod?: 'DELIVERY' | 'PICKUP';
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  branchId?: number;
 }

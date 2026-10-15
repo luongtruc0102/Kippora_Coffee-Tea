@@ -14,6 +14,7 @@ interface JwtPayload {
   sub: number;
   email: string;
   role: string;
+  sid: string;
 }
 
 interface AuthenticatedRequest extends Request {
@@ -55,38 +56,53 @@ export class JwtAuthGuard implements CanActivate {
       );
     }
 
-    // Luôn kiểm tra trạng thái hiện tại để tài khoản vừa bị khóa mất quyền ngay.
-    const currentUser = await this.prisma.user.findUnique({
-      where: {
-        id: payload.sub,
-      },
+    if (!payload.sid) {
+      throw new UnauthorizedException('Phiên đăng nhập không hợp lệ');
+    }
 
-      select: {
-        email: true,
-        isActive: true,
-
-        role: {
-          select: {
-            name: true,
-          },
+    // Luôn kiểm tra user và phiên hiện tại để khóa tài khoản/đăng xuất có hiệu lực ngay.
+    const [currentUser, session] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: {
+          id: payload.sub,
         },
 
-        staffProfile: {
-          select: {
-            branch: {
-              select: {
-                id: true,
-                isActive: true,
+        select: {
+          email: true,
+          isActive: true,
+
+          role: {
+            select: {
+              name: true,
+            },
+          },
+
+          staffProfile: {
+            select: {
+              branch: {
+                select: {
+                  id: true,
+                  isActive: true,
+                },
               },
             },
           },
         },
-      },
-    });
+      }),
+      this.prisma.authSession.findFirst({
+        where: {
+          id: payload.sid,
+          userId: payload.sub,
+          revokedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+        select: { id: true, lastSeenAt: true },
+      }),
+    ]);
 
-    if (!currentUser || !currentUser.isActive) {
+    if (!currentUser || !currentUser.isActive || !session) {
       throw new UnauthorizedException(
-        'Tài khoản không tồn tại hoặc đã bị khóa',
+        'Phiên đăng nhập đã kết thúc hoặc tài khoản đã bị khóa',
       );
     }
 
@@ -104,7 +120,18 @@ export class JwtAuthGuard implements CanActivate {
       sub: payload.sub,
       email: currentUser.email,
       role: currentUser.role.name,
+      sid: payload.sid,
     };
+
+    // Chỉ cập nhật mốc hoạt động theo khoảng để không ghi database ở mọi request.
+    if (Date.now() - session.lastSeenAt.getTime() >= 5 * 60 * 1000) {
+      void this.prisma.authSession
+        .update({
+          where: { id: session.id },
+          data: { lastSeenAt: new Date() },
+        })
+        .catch(() => undefined);
+    }
 
     return true;
   }

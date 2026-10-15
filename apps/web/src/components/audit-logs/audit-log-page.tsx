@@ -53,6 +53,14 @@ const moduleView: Record<AuditModule, { label: string; className: string }> = {
     label: "Chốt sổ tháng",
     className: "bg-teal-50 text-teal-700",
   },
+  CONTENT: {
+    label: "Nội dung",
+    className: "bg-sky-50 text-sky-700",
+  },
+  SUPPORT: {
+    label: "CSKH",
+    className: "bg-pink-50 text-pink-700",
+  },
 };
 
 const actionLabels: Record<string, string> = {
@@ -113,12 +121,23 @@ const actionLabels: Record<string, string> = {
   APPLY_PRICE: "Áp dụng giá bán mới",
   CLOSE_MONTH: "Chốt sổ tháng",
   REOPEN_MONTH: "Mở lại kỳ kế toán",
+  CREATE_CONTENT_PAGE: "Tạo trang nội dung",
+  UPDATE_CONTENT_PAGE: "Cập nhật trang nội dung",
+  PUBLISH_CONTENT_PAGE: "Công khai trang nội dung",
+  UNPUBLISH_CONTENT_PAGE: "Ẩn trang nội dung",
+  CREATE_BANNER: "Tạo banner",
+  UPDATE_BANNER: "Cập nhật banner",
+  ACTIVATE_BANNER: "Bật banner",
+  DEACTIVATE_BANNER: "Tắt banner",
   CREATE_BANK_ACCOUNT: "Cấu hình tài khoản nhận tiền",
   UPDATE_BANK_ACCOUNT: "Cập nhật tài khoản nhận tiền",
   RECEIVE_BANK_TRANSACTION: "Nhận giao dịch chuyển khoản",
   AUTO_MATCH: "Tự động đối soát chuyển khoản",
   MANUAL_MATCH: "Ghép giao dịch thủ công",
   IGNORE_BANK_TRANSACTION: "Bỏ qua giao dịch chuyển khoản",
+  UPDATE_STATUS: "Đổi trạng thái hội thoại",
+  SEND_REPLY: "Phản hồi khách hàng",
+  TRANSFER_BRANCH: "Chuyển chi nhánh xử lý",
 };
 
 const fieldLabels: Record<string, string> = {
@@ -173,6 +192,11 @@ const fieldLabels: Record<string, string> = {
   incurredOn: "Ngày phát sinh",
   submittedAt: "Thời gian gửi duyệt",
   reviewedAt: "Thời gian xử lý",
+  branchId: "Mã chi nhánh",
+  relatedOrderId: "Đơn hàng liên quan",
+  firstResponseAt: "Phản hồi đầu tiên",
+  resolvedAt: "Thời gian hoàn tất",
+  reopenedCount: "Số lần mở lại",
   expectedAt: "Ngày dự kiến giao",
   orderedAt: "Thời gian đặt hàng",
   completedAt: "Thời gian nhận đủ",

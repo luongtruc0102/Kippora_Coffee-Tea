@@ -194,6 +194,12 @@ export type DashboardOperations = {
     pendingExpenses: number;
     pendingCashSessions: number;
     overdueCashSessions: number;
+    expiredLots: number;
+    expiringLots: number;
+    pendingInventoryCounts: number;
+    pendingPurchaseOrders: number;
+    overduePurchaseOrders: number;
+    bankReconciliationIssues: number;
   };
   lowStockItems: Array<{
     stockId: number;
@@ -239,6 +245,19 @@ export type DashboardOperations = {
     businessDate: string;
     status: "OPEN" | "PENDING_REVIEW";
     difference: number | null;
+    branch: DashboardOperationBranch;
+  }>;
+  inventoryLotAlerts: Array<{
+    id: number;
+    code: string;
+    ingredientName: string;
+    unit: "GRAM" | "MILLILITER" | "PIECE";
+    quantity: number;
+    reservedQuantity: number;
+    availableQuantity: number;
+    expiresAt: string;
+    daysToExpiry: number;
+    expiryState: "EXPIRED" | "EXPIRING";
     branch: DashboardOperationBranch;
   }>;
 };

@@ -160,11 +160,17 @@ export async function getDeliveryQuote(
   deliveryAddress: string,
   subtotal: number,
   fulfillmentMethod: FulfillmentMethod,
+  branchId?: number,
 ): Promise<DeliveryQuote> {
   const response = await fetch(`${getApiUrl()}/orders/delivery-quote`, {
     method: "POST",
     headers: getHeaders(accessToken),
-    body: JSON.stringify({ deliveryAddress, subtotal, fulfillmentMethod }),
+    body: JSON.stringify({
+      deliveryAddress,
+      subtotal,
+      fulfillmentMethod,
+      branchId,
+    }),
   });
 
   const data = await response.json();
@@ -182,9 +188,12 @@ export async function getDeliveryQuote(
 export async function getAddressSuggestions(
   accessToken: string,
   query: string,
+  branchId?: number,
 ): Promise<AddressSuggestion[]> {
+  const params = new URLSearchParams({ query: query.trim() });
+  if (branchId) params.set("branchId", String(branchId));
   const response = await fetch(
-    `${getApiUrl()}/orders/address-suggestions?query=${encodeURIComponent(query.trim())}`,
+    `${getApiUrl()}/orders/address-suggestions?${params.toString()}`,
     {
       headers: getHeaders(accessToken),
       cache: "no-store",
@@ -210,6 +219,7 @@ export async function getDeliveryLocationQuote(
     subtotal: number;
     fulfillmentMethod: FulfillmentMethod;
     deliveryAddress?: string;
+    branchId?: number;
   },
 ): Promise<DeliveryQuote> {
   const response = await fetch(
@@ -233,6 +243,7 @@ export async function getDeliveryLocationQuote(
 }
 
 export type CheckoutInput = {
+  branchId?: number;
   cartItemIds?: number[];
   reorderOrderId?: number;
   reorderOrderItemIds?: number[];

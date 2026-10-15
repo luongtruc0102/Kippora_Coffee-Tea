@@ -32,6 +32,7 @@ import {
   lookupPosCustomer,
   type PosCustomerLookupResult,
 } from "@/services/order.service";
+import { getBranchStatus } from "@/services/store-settings.service";
 import type { Category, Product, Topping } from "@/types/menu";
 import type { Order } from "@/types/order";
 
@@ -94,9 +95,35 @@ export default function StaffPosPage() {
   const [paymentMethod, setPaymentMethod] = useState<"CASH" | "BANK_TRANSFER">(
     "CASH",
   );
+  const [bankTransferAvailable, setBankTransferAvailable] = useState<
+    boolean | null
+  >(null);
   const [submitting, setSubmitting] = useState(false);
   const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
   const [exportingPdf, setExportingPdf] = useState(false);
+
+  useEffect(() => {
+    const accessToken = sessionStorage.getItem("accessToken");
+    if (!accessToken) return;
+
+    const controller = new AbortController();
+    void getBranchStatus(accessToken, controller.signal)
+      .then((status) => {
+        setBankTransferAvailable(status.bankTransferAvailable);
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setBankTransferAvailable(false);
+        showToast(
+          error instanceof Error
+            ? error.message
+            : "Không thể kiểm tra tài khoản nhận chuyển khoản",
+          "error",
+        );
+      });
+
+    return () => controller.abort();
+  }, [showToast]);
 
   // Menu POS dùng cùng API fuzzy search với menu khách hàng.
   useEffect(() => {
@@ -765,12 +792,23 @@ export default function StaffPosPage() {
               </button>
               <button
                 type="button"
+                disabled={!bankTransferAvailable}
                 onClick={() => setPaymentMethod("BANK_TRANSFER")}
-                className={`flex h-11 items-center justify-center gap-2 rounded-xl border text-sm font-semibold ${paymentMethod === "BANK_TRANSFER" ? "border-[#C9894B] bg-[#FCF4EA] text-[#9A5C2F]" : "border-[#E9E1D8] text-[#5E5650]"}`}
+                title={
+                  bankTransferAvailable
+                    ? "Thanh toán bằng chuyển khoản"
+                    : "Chi nhánh chưa cấu hình tài khoản nhận chuyển khoản"
+                }
+                className={`flex h-11 items-center justify-center gap-2 rounded-xl border text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${paymentMethod === "BANK_TRANSFER" ? "border-[#C9894B] bg-[#FCF4EA] text-[#9A5C2F]" : "border-[#E9E1D8] text-[#5E5650]"}`}
               >
                 <CreditCard size={17} /> Chuyển khoản
               </button>
             </div>
+            {bankTransferAvailable === false && (
+              <p className="-mt-1 text-xs text-amber-700">
+                Chi nhánh chưa cấu hình tài khoản nhận chuyển khoản.
+              </p>
+            )}
 
             {selectedLoyaltyPoints > 0 && (
               <div className="flex items-center justify-between border-t border-[#F0E8E0] pt-3 text-sm">

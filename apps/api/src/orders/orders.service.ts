@@ -144,51 +144,20 @@ export class OrdersService {
     };
   }
 
-  private getStoreCoordinates() {
-    const latitude = Number(process.env.STORE_LATITUDE ?? '10.8569371');
-    const longitude = Number(process.env.STORE_LONGITUDE ?? '106.7465042');
-
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-      throw new BadRequestException('Tọa độ cửa hàng chưa được cấu hình');
-    }
-
-    return { latitude, longitude };
-  }
-
-  private getStoreAddress() {
-    return (
-      process.env.STORE_ADDRESS ??
-      '78 Đường Số 29, phường Hiệp Bình, TP. Hồ Chí Minh'
-    );
-  }
-
-  private calculateDeliveryPricing(distanceKm: number, subtotal: number) {
-    const deliveryBaseFee =
-      15000 + Math.max(0, Math.ceil(distanceKm - 3)) * 5000;
-    const requestedDiscount =
-      subtotal >= 500000 ? 40000 : subtotal >= 300000 ? 20000 : 0;
-    const deliveryDiscountAmount = Math.min(requestedDiscount, deliveryBaseFee);
-
-    return {
-      deliveryBaseFee,
-      deliveryDiscountAmount,
-      deliveryFee: deliveryBaseFee - deliveryDiscountAmount,
-    };
-  }
-
   private async getDrivingRoute(
+    originLatitude: number,
+    originLongitude: number,
     destinationLatitude: number,
     destinationLongitude: number,
     includeGeometry = false,
     reverseRoute = false,
   ) {
-    const store = this.getStoreCoordinates();
     const routeOptions = includeGeometry
       ? 'overview=full&geometries=geojson'
       : 'overview=false';
     const routePoints = reverseRoute
-      ? `${destinationLongitude},${destinationLatitude};${store.longitude},${store.latitude}`
-      : `${store.longitude},${store.latitude};${destinationLongitude},${destinationLatitude}`;
+      ? `${destinationLongitude},${destinationLatitude};${originLongitude},${originLatitude}`
+      : `${originLongitude},${originLatitude};${destinationLongitude},${destinationLatitude}`;
     const response = await fetch(
       `https://router.project-osrm.org/route/v1/driving/${routePoints}?${routeOptions}`,
     );
@@ -292,9 +261,18 @@ export class OrdersService {
     normalizedAddress: string,
     subtotal: number,
     fulfillmentMethod?: 'DELIVERY' | 'PICKUP',
+    branchId?: number,
   ) {
+    const status = await this.storeSettingsService.getStatus(branchId);
+    const storeLatitude = status.branch.latitude;
+    const storeLongitude = status.branch.longitude;
+    if (storeLatitude === null || storeLongitude === null) {
+      throw new BadRequestException('Chi nhánh chưa cấu hình tọa độ giao nhận');
+    }
     const isPickupRoute = fulfillmentMethod === 'PICKUP';
     const route = await this.getDrivingRoute(
+      storeLatitude,
+      storeLongitude,
       latitude,
       longitude,
       true,
@@ -306,7 +284,10 @@ export class OrdersService {
           deliveryDiscountAmount: 0,
           deliveryFee: 0,
         }
-      : this.calculateDeliveryPricing(route.distanceKm, subtotal);
+      : await this.storeSettingsService.calculateDeliveryPricing(
+          route.distanceKm,
+          subtotal,
+        );
 
     return {
       latitude,
@@ -318,10 +299,15 @@ export class OrdersService {
     };
   }
 
-  async searchAddressSuggestions(query: string) {
-    const store = this.getStoreCoordinates();
+  async searchAddressSuggestions(query: string, branchId?: number) {
+    const status = await this.storeSettingsService.getStatus(branchId);
+    const storeLatitude = status.branch.latitude;
+    const storeLongitude = status.branch.longitude;
+    if (storeLatitude === null || storeLongitude === null) {
+      throw new BadRequestException('Chi nhánh chưa cấu hình tọa độ giao nhận');
+    }
     const response = await fetch(
-      `https://photon.komoot.io/api/?limit=5&countrycode=VN&lat=${store.latitude}&lon=${store.longitude}&q=${encodeURIComponent(query.trim())}`,
+      `https://photon.komoot.io/api/?limit=5&countrycode=VN&lat=${storeLatitude}&lon=${storeLongitude}&q=${encodeURIComponent(query.trim())}`,
       { headers: this.getMapRequestHeaders() },
     );
     const data = (await response.json()) as {
@@ -385,6 +371,7 @@ export class OrdersService {
       geocodeData[0].display_name,
       deliveryQuoteDto.subtotal,
       deliveryQuoteDto.fulfillmentMethod,
+      deliveryQuoteDto.branchId,
     );
   }
 
@@ -404,6 +391,7 @@ export class OrdersService {
       normalizedAddress,
       deliveryLocationQuoteDto.subtotal,
       deliveryLocationQuoteDto.fulfillmentMethod,
+      deliveryLocationQuoteDto.branchId,
     );
   }
 
@@ -518,6 +506,9 @@ export class OrdersService {
     const initialStoreStatus =
       await this.storeSettingsService.assertCanCheckout(
         checkoutDto.fulfillmentMethod,
+        undefined,
+        checkoutDto.branchId,
+        checkoutDto.paymentMethod,
       );
 
     const hasCartSource = Boolean(checkoutDto.cartItemIds?.length);
@@ -668,9 +659,21 @@ export class OrdersService {
 
     // Backend tự quyết định phí dựa trên cách khách nhận món.
     const isPickup = checkoutDto.fulfillmentMethod === 'PICKUP';
-    const storeCoordinates = this.getStoreCoordinates();
+    const storeCoordinates = {
+      latitude: initialStoreStatus.branch.latitude,
+      longitude: initialStoreStatus.branch.longitude,
+    };
+    if (
+      storeCoordinates.latitude === null ||
+      storeCoordinates.longitude === null ||
+      !initialStoreStatus.branch.address
+    ) {
+      throw new BadRequestException(
+        'Chi nhánh chưa cấu hình đầy đủ địa chỉ và tọa độ nhận đơn',
+      );
+    }
     const deliveryAddress = isPickup
-      ? this.getStoreAddress()
+      ? initialStoreStatus.branch.address
       : checkoutDto.deliveryAddress.trim();
     const deliveryLatitude = isPickup
       ? storeCoordinates.latitude
@@ -680,14 +683,21 @@ export class OrdersService {
       : Number(checkoutDto.deliveryLongitude);
     const deliveryDistanceKm = isPickup
       ? 0
-      : (await this.getDrivingRoute(deliveryLatitude, deliveryLongitude))
-          .distanceKm;
+      : (
+          await this.getDrivingRoute(
+            storeCoordinates.latitude,
+            storeCoordinates.longitude,
+            deliveryLatitude,
+            deliveryLongitude,
+          )
+        ).distanceKm;
 
     // Backend chặn lần cuối nếu địa chỉ vượt quá bán kính giao hàng.
     await this.storeSettingsService.assertCanCheckout(
       checkoutDto.fulfillmentMethod,
       deliveryDistanceKm,
       branchId,
+      checkoutDto.paymentMethod,
     );
     const { deliveryBaseFee, deliveryDiscountAmount, deliveryFee } = isPickup
       ? {
@@ -695,7 +705,10 @@ export class OrdersService {
           deliveryDiscountAmount: 0,
           deliveryFee: 0,
         }
-      : this.calculateDeliveryPricing(deliveryDistanceKm, subtotal);
+      : await this.storeSettingsService.calculateDeliveryPricing(
+          deliveryDistanceKm,
+          subtotal,
+        );
 
     // =========================
     // VOUCHER
@@ -1058,7 +1071,9 @@ export class OrdersService {
       include: {
         role: true,
         profile: { select: { fullName: true } },
-        staffProfile: { include: { branch: true } },
+        staffProfile: {
+          include: { branch: { include: { bankAccount: true } } },
+        },
       },
     });
 
@@ -1078,6 +1093,15 @@ export class OrdersService {
 
     if (!staff.staffProfile.branch.isActive) {
       throw new BadRequestException('Chi nhánh đã bị khóa bởi Admin');
+    }
+
+    if (
+      createPosOrderDto.paymentMethod === 'BANK_TRANSFER' &&
+      !staff.staffProfile.branch.bankAccount?.isActive
+    ) {
+      throw new BadRequestException(
+        'Chi nhánh chưa cấu hình tài khoản nhận chuyển khoản',
+      );
     }
 
     // Chụp lại dữ liệu đã được kiểm tra để giữ type an toàn trong transaction.

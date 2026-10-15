@@ -17,6 +17,7 @@ import {
   assignShiftCoverage,
   getBranchLeaveRequests,
   getShiftCoverageCandidates,
+  openLeaveEvidence,
   reviewStaffLeave,
 } from "@/services/staff-leave.service";
 import type {
@@ -75,6 +76,7 @@ function ReviewModal({
   onClose: () => void;
   onReviewed: (request: StaffLeaveRequest) => void;
 }) {
+  const { showToast } = useAppToast();
   const reassigning =
     request.status === "APPROVED" && request.scope === "LATE_ARRIVAL";
   const [action, setAction] = useState<ReviewAction>("APPROVED");
@@ -84,6 +86,21 @@ function ReviewModal({
   const [candidates, setCandidates] = useState<ShiftCoverageCandidate[]>([]);
   const [coveringEmployeeId, setCoveringEmployeeId] = useState("");
   const [loadingCandidates, setLoadingCandidates] = useState(false);
+
+  async function viewEvidence(evidenceUrl: string) {
+    const accessToken = sessionStorage.getItem("accessToken");
+    if (!accessToken) return;
+    try {
+      await openLeaveEvidence(accessToken, evidenceUrl);
+    } catch (viewError) {
+      showToast(
+        viewError instanceof Error
+          ? viewError.message
+          : "Không thể mở minh chứng",
+        "error",
+      );
+    }
+  }
 
   useEffect(() => {
     if (request.scope !== "LATE_ARRIVAL") return;
@@ -222,14 +239,13 @@ function ReviewModal({
               <strong>Lý do:</strong> {request.reason}
             </p>
             {request.evidenceUrl && (
-              <a
-                href={request.evidenceUrl}
-                target="_blank"
-                rel="noreferrer"
+              <button
+                type="button"
+                onClick={() => void viewEvidence(request.evidenceUrl!)}
                 className="mt-2 inline-flex items-center gap-1.5 font-semibold text-[#C2763D] hover:underline"
               >
                 Xem minh chứng <ExternalLink size={14} />
-              </a>
+              </button>
             )}
           </div>
 

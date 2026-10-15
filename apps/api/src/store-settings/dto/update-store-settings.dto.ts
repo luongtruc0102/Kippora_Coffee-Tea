@@ -50,6 +50,48 @@ export class UpdateStoreSettingsDto {
   maxDeliveryDistanceKm?: number;
 
   @IsOptional()
+  @IsNumber()
+  @Min(0.5)
+  @Max(100)
+  deliveryBaseDistanceKm?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(1000000)
+  deliveryBaseFee?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(1000000)
+  deliveryFeePerKm?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100000000)
+  deliveryDiscountFirstThreshold?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(1000000)
+  deliveryDiscountFirstAmount?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100000000)
+  deliveryDiscountSecondThreshold?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(1000000)
+  deliveryDiscountSecondAmount?: number;
+
+  @IsOptional()
   @IsString()
   @MaxLength(200)
   pauseReason?: string | null;

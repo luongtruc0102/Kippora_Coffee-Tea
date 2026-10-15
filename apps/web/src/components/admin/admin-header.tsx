@@ -1,21 +1,13 @@
-'use client';
+"use client";
 
-import {
-  useEffect,
-  useState,
-} from 'react';
+import { useEffect, useState } from "react";
 
-import {
-  LogOut,
-  Menu,
-  UserRound,
-} from 'lucide-react';
+import { LogOut, Menu, UserRound } from "lucide-react";
 
-import {
-  useRouter,
-} from 'next/navigation';
+import { useRouter } from "next/navigation";
 
-import NotificationBell from '@/components/user/notification-bell';
+import NotificationBell from "@/components/user/notification-bell";
+import { logout } from "@/services/auth.service";
 
 type CurrentUser = {
   id: number;
@@ -28,18 +20,10 @@ type Props = {
   onOpenSidebar: () => void;
 };
 
-export default function AdminHeader({
-  onOpenSidebar,
-}: Props) {
-  const router =
-    useRouter();
+export default function AdminHeader({ onOpenSidebar }: Props) {
+  const router = useRouter();
 
-  const [
-    user,
-    setUser,
-  ] = useState<CurrentUser | null>(
-    null,
-  );
+  const [user, setUser] = useState<CurrentUser | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -49,37 +33,23 @@ export default function AdminHeader({
         return;
       }
 
-      const storedUser =
-        sessionStorage.getItem(
-          'user',
-        );
+      const storedUser = sessionStorage.getItem("user");
 
       if (!storedUser) {
         return;
       }
 
       try {
-        const parsedUser: CurrentUser =
-          JSON.parse(
-            storedUser,
-          );
+        const parsedUser: CurrentUser = JSON.parse(storedUser);
 
-        setUser(
-          parsedUser,
-        );
+        setUser(parsedUser);
       } catch {
         // Xóa phiên nếu localStorage không hợp lệ
-        sessionStorage.removeItem(
-          'user',
-        );
+        sessionStorage.removeItem("user");
 
-        sessionStorage.removeItem(
-          'accessToken',
-        );
+        sessionStorage.removeItem("accessToken");
 
-        router.replace(
-          '/login',
-        );
+        router.replace("/login");
       }
     });
 
@@ -88,18 +58,18 @@ export default function AdminHeader({
     };
   }, [router]);
 
-  function handleLogout() {
-    sessionStorage.removeItem(
-      'accessToken',
-    );
+  async function handleLogout() {
+    const accessToken = sessionStorage.getItem("accessToken");
 
-    sessionStorage.removeItem(
-      'user',
-    );
-
-    router.replace(
-      '/login',
-    );
+    try {
+      if (accessToken) await logout(accessToken);
+    } catch {
+      // Mất mạng vẫn phải cho người dùng kết thúc phiên trên thiết bị này.
+    } finally {
+      sessionStorage.removeItem("accessToken");
+      sessionStorage.removeItem("user");
+      router.replace("/login");
+    }
   }
 
   return (
@@ -107,14 +77,10 @@ export default function AdminHeader({
       <div className="flex items-center gap-3">
         <button
           type="button"
-          onClick={
-            onOpenSidebar
-          }
+          onClick={onOpenSidebar}
           className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#E9E1D8] text-[#5E5650] transition hover:bg-[#FAF8F5] lg:hidden"
         >
-          <Menu
-            size={20}
-          />
+          <Menu size={20} />
         </button>
 
         <div>
@@ -132,20 +98,16 @@ export default function AdminHeader({
         <NotificationBell />
 
         <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F3E9DE] text-[#4A2C20]">
-          <UserRound
-            size={19}
-          />
+          <UserRound size={19} />
         </div>
 
         <div className="hidden text-right sm:block">
           <p className="max-w-[180px] truncate text-sm font-semibold text-[#1F1B18]">
-            {user?.fullName ??
-              'Admin'}
+            {user?.fullName ?? "Admin"}
           </p>
 
           <p className="text-xs uppercase text-[#78866B]">
-            {user?.role ??
-              'ADMIN'}
+            {user?.role ?? "ADMIN"}
           </p>
         </div>
 
@@ -153,15 +115,11 @@ export default function AdminHeader({
 
         <button
           type="button"
-          onClick={
-            handleLogout
-          }
+          onClick={handleLogout}
           title="Đăng xuất"
           className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#F3E9DE] text-[#4A2C20] transition hover:bg-[#EADBCB]"
         >
-          <LogOut
-            size={19}
-          />
+          <LogOut size={19} />
         </button>
       </div>
     </header>

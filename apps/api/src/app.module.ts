@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { PrismaModule } from './prisma/prisma.module';
 import { HealthModule } from './health/health.module';
 import { FuzzySearchModule } from './common/fuzzy-search/fuzzy-search.module';
@@ -33,6 +34,9 @@ import { CashSessionsModule } from './cash-sessions/cash-sessions.module';
 import { ProfitabilityModule } from './profitability/profitability.module';
 import { PricingModule } from './pricing/pricing.module';
 import { MonthCloseModule } from './month-close/month-close.module';
+import { ContentPagesModule } from './content-pages/content-pages.module';
+import { BannersModule } from './banners/banners.module';
+import { SupportModule } from './support/support.module';
 
 @Module({
   imports: [
@@ -40,6 +44,14 @@ import { MonthCloseModule } from './month-close/month-close.module';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+
+    // Giới hạn lưu lượng chung; các API nhạy cảm như đăng nhập có hạn mức thấp hơn.
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60_000,
+        limit: 180,
+      },
+    ]),
 
     // Fuzzy search dùng chung: hỗ trợ tiếng Việt, sai chính tả và nhiều trường
     FuzzySearchModule,
@@ -125,9 +137,23 @@ import { MonthCloseModule } from './month-close/month-close.module';
 
     // Chốt sổ kế toán tháng theo chi nhánh và lưu snapshot báo cáo bất biến.
     MonthCloseModule,
+
+    // Các trang giới thiệu, hỗ trợ và chính sách được Admin quản lý từ database.
+    ContentPagesModule,
+
+    // Banner trang chủ có lịch hiển thị và liên kết đến dữ liệu thật.
+    BannersModule,
+
+    // Hội thoại chăm sóc khách hàng giữa người dùng và Admin.
+    SupportModule,
   ],
 
   providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+
     // Global Guard: mọi API mặc định phải có Access Token,
     // trừ các API được đánh dấu bằng @Public()
     {

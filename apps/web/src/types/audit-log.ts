@@ -9,7 +9,9 @@ export type AuditModule =
   | "ORDER"
   | "PAYMENT"
   | "PRICING"
-  | "MONTH_CLOSE";
+  | "MONTH_CLOSE"
+  | "CONTENT"
+  | "SUPPORT";
 
 export type AuditLogItem = {
   id: number;

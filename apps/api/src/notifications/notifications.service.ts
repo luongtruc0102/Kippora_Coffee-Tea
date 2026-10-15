@@ -44,6 +44,7 @@ const OPERATIONAL_TYPES = [
   'ATTENDANCE_CLOCK_OUT_OVERDUE',
   'ATTENDANCE_MISSING',
   'SHIFT_STARTING_SOON',
+  'SUPPORT_RESPONSE_OVERDUE',
   'BANK_RECONCILIATION_AMOUNT_MISMATCH',
   'BANK_RECONCILIATION_UNMATCHED',
 ] as const;
@@ -76,6 +77,8 @@ function actionUrl(type: string, role: string) {
     return admin ? '/admin/schedules' : '/staff/employees';
   if (type.startsWith('ATTENDANCE_') || type === 'SHIFT_STARTING_SOON')
     return admin ? '/admin/schedules' : '/staff/schedules';
+  if (type === 'SUPPORT_RESPONSE_OVERDUE')
+    return admin ? '/admin/chat' : '/staff/chat';
   if (type.startsWith('ORDER_') || type === 'PAYMENT_CONFIRMED')
     return admin ? '/admin/orders' : '/staff/orders';
   return admin ? '/admin/notifications' : '/staff/notifications';
@@ -119,6 +122,7 @@ function severityOf(type: string): AlertSeverity {
     type === 'LOW_STOCK' ||
     type === 'ATTENDANCE_CLOCK_OUT_OVERDUE' ||
     type === 'ATTENDANCE_MISSING' ||
+    type === 'SUPPORT_RESPONSE_OVERDUE' ||
     type.endsWith('_SUBMITTED') ||
     type.endsWith('_PENDING') ||
     type.endsWith('_REOPENED') ||
@@ -135,6 +139,7 @@ function requiresAction(type: string) {
     type === 'INVENTORY_LOT_EXPIRING' ||
     type === 'ATTENDANCE_CLOCK_OUT_OVERDUE' ||
     type === 'ATTENDANCE_MISSING' ||
+    type === 'SUPPORT_RESPONSE_OVERDUE' ||
     type.startsWith('BANK_RECONCILIATION_') ||
     type.endsWith('_SUBMITTED') ||
     type.endsWith('_PENDING') ||
@@ -158,6 +163,73 @@ export function enrichOperationalNotification(
 @Injectable()
 export class NotificationsService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private async syncSupportAlerts(userId: number, role: string) {
+    if (role !== 'ADMIN') return;
+
+    const overdueBefore = new Date(Date.now() - 10 * 60_000);
+    const conversations = await this.prisma.supportConversation.findMany({
+      where: {
+        status: 'OPEN',
+        lastMessageAt: { lte: overdueBefore },
+      },
+      select: {
+        id: true,
+        lastMessageAt: true,
+        branch: { select: { code: true, name: true } },
+        customer: {
+          select: {
+            email: true,
+            profile: { select: { fullName: true } },
+          },
+        },
+        messages: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { senderType: true },
+        },
+      },
+      take: 100,
+    });
+
+    const alerts = conversations
+      .filter(
+        (conversation) => conversation.messages[0]?.senderType === 'CUSTOMER',
+      )
+      .map((conversation) => {
+        const customerName =
+          conversation.customer.profile?.fullName?.trim() ||
+          conversation.customer.email;
+        const branchName = conversation.branch.code || conversation.branch.name;
+        return {
+          userId,
+          dedupeKey: `SUPPORT_RESPONSE_OVERDUE:${conversation.id}:${conversation.lastMessageAt.toISOString()}`,
+          type: 'SUPPORT_RESPONSE_OVERDUE',
+          title: 'Hội thoại CSKH chờ quá lâu',
+          message: `${branchName} · ${customerName} đang chờ phản hồi hơn 10 phút.`,
+        };
+      });
+
+    if (alerts.length) {
+      await this.prisma.notification.createMany({
+        data: alerts,
+        skipDuplicates: true,
+      });
+    }
+
+    const activeDedupeKeys = alerts.map((alert) => alert.dedupeKey);
+    await this.prisma.notification.updateMany({
+      where: {
+        userId,
+        type: 'SUPPORT_RESPONSE_OVERDUE',
+        isRead: false,
+        ...(activeDedupeKeys.length
+          ? { dedupeKey: { notIn: activeDedupeKeys } }
+          : {}),
+      },
+      data: { isRead: true, readAt: new Date() },
+    });
+  }
 
   private async syncAttendanceAlerts(userId: number, role: string) {
     if (!['ADMIN', 'BRANCH_MANAGER'].includes(role)) return;
@@ -314,7 +386,12 @@ export class NotificationsService {
     const isManager = Boolean(
       role && ['ADMIN', 'BRANCH_MANAGER'].includes(role),
     );
-    if (isManager && role) await this.syncAttendanceAlerts(userId, role);
+    if (isManager && role) {
+      await Promise.all([
+        this.syncAttendanceAlerts(userId, role),
+        this.syncSupportAlerts(userId, role),
+      ]);
+    }
     const [items, unreadCount] = await this.prisma.$transaction([
       this.prisma.notification.findMany({
         where: { userId },
@@ -344,7 +421,10 @@ export class NotificationsService {
     role: string,
     query: ListOperationalAlertsDto,
   ) {
-    await this.syncAttendanceAlerts(userId, role);
+    await Promise.all([
+      this.syncAttendanceAlerts(userId, role),
+      this.syncSupportAlerts(userId, role),
+    ]);
     const keyword = query.q?.trim().toLocaleLowerCase('vi-VN');
     const filteredTypes = OPERATIONAL_TYPES.filter((type) => {
       if (

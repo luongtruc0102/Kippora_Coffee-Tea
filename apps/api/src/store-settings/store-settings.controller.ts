@@ -7,6 +7,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
   Req,
 } from '@nestjs/common';
 import { Request } from 'express';
@@ -28,11 +29,20 @@ interface AuthenticatedRequest extends Request {
 export class StoreSettingsController {
   constructor(private readonly storeSettingsService: StoreSettingsService) {}
 
+  // Trang Cửa hàng chỉ hiển thị các chi nhánh đang hoạt động.
+  @Public()
+  @Get('locations')
+  getLocations() {
+    return this.storeSettingsService.getLocations();
+  }
+
   // Trạng thái công khai đã kết hợp cấp hệ thống, chi nhánh và giờ hoạt động.
   @Public()
   @Get('status')
-  getStatus() {
-    return this.storeSettingsService.getStatus();
+  getStatus(
+    @Query('branchId', new ParseIntPipe({ optional: true })) branchId?: number,
+  ) {
+    return this.storeSettingsService.getStatus(branchId);
   }
 
   @Roles('ADMIN')

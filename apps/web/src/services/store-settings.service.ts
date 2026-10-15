@@ -1,6 +1,7 @@
 import type {
   BranchStatus,
   CreateBranchInput,
+  PublicStoreLocation,
   StoreSettings,
   StoreStatus,
   UpdateBranchInput,
@@ -44,8 +45,10 @@ async function readResponse<T>(
 // Trạng thái công khai đã kết hợp hệ thống, chi nhánh và giờ hoạt động.
 export async function getStoreStatus(
   signal?: AbortSignal,
+  branchId?: number,
 ): Promise<StoreStatus> {
-  const response = await fetch(`${getApiUrl()}/store/status`, {
+  const query = branchId ? `?branchId=${encodeURIComponent(branchId)}` : "";
+  const response = await fetch(`${getApiUrl()}/store/status${query}`, {
     cache: "no-store",
     signal,
   });
@@ -53,6 +56,21 @@ export async function getStoreStatus(
   return readResponse<StoreStatus>(
     response,
     "Không thể tải trạng thái cửa hàng",
+  );
+}
+
+// Điểm bán công khai cho trang Cửa hàng và thông tin liên hệ ở footer.
+export async function getPublicStoreLocations(
+  signal?: AbortSignal,
+): Promise<PublicStoreLocation[]> {
+  const response = await fetch(`${getApiUrl()}/store/locations`, {
+    cache: "no-store",
+    signal,
+  });
+
+  return readResponse<PublicStoreLocation[]>(
+    response,
+    "Không thể tải danh sách cửa hàng",
   );
 }
 

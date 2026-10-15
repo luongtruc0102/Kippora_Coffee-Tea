@@ -20,10 +20,11 @@ import { usePathname, useRouter } from "next/navigation";
 
 import BrandLogo from "@/components/brand/brand-logo";
 import NotificationBell from "@/components/user/notification-bell";
-import StoreStatusBadge from "@/components/user/store-status-badge";
 import { useAppToast } from "@/components/ui/app-toast-provider";
 
 import { getCart } from "@/services/cart.service";
+import { logout } from "@/services/auth.service";
+import { getContentNavigation } from "@/services/content-page.service";
 import {
   checkInMyAttendance,
   getMyCurrentAttendance,
@@ -31,6 +32,7 @@ import {
 import { getMyScheduleStatus } from "@/services/staff-schedule.service";
 import type { MyScheduleStatus } from "@/types/staff-schedule";
 import type { StaffAttendance } from "@/types/user";
+import type { ContentPageLink } from "@/types/content-page";
 
 import { CART_UPDATED_EVENT, getCartItemCount } from "@/utils/cart.util";
 
@@ -47,6 +49,10 @@ const navItems = [
   {
     label: "Menu",
     href: "/menu",
+  },
+  {
+    label: "Cửa hàng",
+    href: "/cua-hang",
   },
 ];
 
@@ -68,8 +74,22 @@ export default function UserHeader() {
 
   const [attendanceLoading, setAttendanceLoading] = useState(false);
 
-  const [scheduleStatus, setScheduleStatus] =
-    useState<MyScheduleStatus | null>(null);
+  const [scheduleStatus, setScheduleStatus] = useState<MyScheduleStatus | null>(
+    null,
+  );
+
+  const [contentLinks, setContentLinks] = useState<ContentPageLink[]>([]);
+
+  // Header lấy các mục đã được Admin chọn công khai từ database.
+  useEffect(() => {
+    const controller = new AbortController();
+    void getContentNavigation(controller.signal)
+      .then((items) => setContentLinks(items))
+      .catch(() => {
+        // Lỗi nội dung phụ không được làm gián đoạn thao tác đặt món.
+      });
+    return () => controller.abort();
+  }, []);
 
   // Khôi phục user, tải badge ban đầu và lắng nghe mọi thay đổi của giỏ.
   useEffect(() => {
@@ -124,7 +144,6 @@ export default function UserHeader() {
                 setCartItemCount(0);
               }
             });
-
         }
       } catch {
         sessionStorage.removeItem("user");
@@ -201,30 +220,47 @@ export default function UserHeader() {
 
   // Nhân viên dùng chung giao diện mua hàng với khách, đồng thời có thêm trang
   // ca làm riêng để gửi và theo dõi yêu cầu nghỉ.
+  const publicContentItems = contentLinks
+    .filter((item) => item.showInHeader)
+    .slice(0, 3)
+    .map((item) => ({
+      label: item.title,
+      href: `/thong-tin/${item.slug}`,
+    }));
+
   const visibleNavItems = user
     ? [
         ...navItems,
+        ...publicContentItems,
         { label: "Đơn hàng", href: "/orders" },
         ...(user.role === "STAFF"
           ? [{ label: "Ca làm", href: "/work-schedule" }]
           : []),
       ]
-    : navItems;
+    : [...navItems, ...publicContentItems];
 
   // Xóa toàn bộ phiên đăng nhập phía client rồi đưa user về màn hình đăng nhập.
-  function handleLogout() {
-    sessionStorage.removeItem("accessToken");
-    sessionStorage.removeItem("user");
+  async function handleLogout() {
+    const accessToken = sessionStorage.getItem("accessToken");
 
-    setUser(null);
-    setCartItemCount(0);
-    setCurrentAttendance(null);
-    setScheduleStatus(null);
-    setMobileOpen(false);
-    setLogoutConfirmOpen(false);
+    try {
+      if (accessToken) await logout(accessToken);
+    } catch {
+      // Mất mạng vẫn phải cho người dùng kết thúc phiên trên thiết bị này.
+    } finally {
+      sessionStorage.removeItem("accessToken");
+      sessionStorage.removeItem("user");
 
-    router.replace("/login");
-    router.refresh();
+      setUser(null);
+      setCartItemCount(0);
+      setCurrentAttendance(null);
+      setScheduleStatus(null);
+      setMobileOpen(false);
+      setLogoutConfirmOpen(false);
+
+      router.replace("/login");
+      router.refresh();
+    }
   }
 
   // Nhân viên chỉ tự bắt đầu ca; nút kết thúc ca nằm ở trang quản lý của trưởng.
@@ -280,7 +316,7 @@ export default function UserHeader() {
       {/* Cao hơn dropdown checkout/Leaflet nhưng vẫn thấp hơn overlay và modal. */}
       <header className="fixed inset-x-0 top-0 z-[1000] border-b border-[#E9E1D8] bg-white/95 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between px-4 sm:px-6 lg:px-8">
-          <div className="flex shrink-0 items-center gap-3">
+          <div className="flex shrink-0 items-center">
             <Link
               href="/"
               aria-label="Kippora - Trang chủ"
@@ -293,8 +329,6 @@ export default function UserHeader() {
                 className="h-auto w-32 sm:w-[150px]"
               />
             </Link>
-
-            <StoreStatusBadge showHours className="hidden xl:inline-flex" />
           </div>
 
           <nav className="hidden items-center gap-1 md:flex">
@@ -319,7 +353,9 @@ export default function UserHeader() {
                 type="button"
                 onClick={() => void handleSelfCheckIn()}
                 disabled={
-                  attendanceLoading || Boolean(currentAttendance) || !canSelfCheckIn
+                  attendanceLoading ||
+                  Boolean(currentAttendance) ||
+                  !canSelfCheckIn
                 }
                 title={checkInTitle}
                 className={`hidden h-10 items-center gap-2 rounded-xl px-3 text-sm font-semibold transition lg:flex ${
@@ -511,7 +547,9 @@ export default function UserHeader() {
                   type="button"
                   onClick={() => void handleSelfCheckIn()}
                   disabled={
-                    attendanceLoading || Boolean(currentAttendance) || !canSelfCheckIn
+                    attendanceLoading ||
+                    Boolean(currentAttendance) ||
+                    !canSelfCheckIn
                   }
                   title={checkInTitle}
                   className={`flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold transition ${

@@ -3,14 +3,27 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
+import helmet from 'helmet';
 
 async function bootstrap() {
   // Khởi tạo toàn bộ ứng dụng NestJS từ AppModule
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  // Cho phép frontend Next.js gọi API từ localhost:3000
+  // Các header bảo vệ phổ biến; cho phép tài nguyên ảnh được hiển thị ở frontend khác cổng.
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+    }),
+  );
+
+  // Danh sách frontend được phép gọi API, cấu hình bằng CORS_ORIGINS khi triển khai.
+  const allowedOrigins = (process.env.CORS_ORIGINS ?? 'http://localhost:3000')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
   app.enableCors({
-    origin: 'http://localhost:3000',
+    origin: allowedOrigins,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
@@ -25,10 +38,18 @@ async function bootstrap() {
     }),
   );
 
-  // Cho frontend truy cập ảnh đã upload
-  app.useStaticAssets(join(process.cwd(), 'uploads'), {
-    prefix: '/uploads/',
-  });
+  // Chỉ ảnh công khai mới được phục vụ trực tiếp. Minh chứng nghỉ phép đi qua
+  // endpoint có Access Token và kiểm tra quyền trong UploadsController.
+  for (const publicDirectory of [
+    'products',
+    'toppings',
+    'avatars',
+    'banners',
+  ]) {
+    app.useStaticAssets(join(process.cwd(), 'uploads', publicDirectory), {
+      prefix: `/uploads/${publicDirectory}/`,
+    });
+  }
 
   // Chạy API ở PORT trong .env, nếu không có thì mặc định dùng port 4000
   await app.listen(process.env.PORT ?? 4000);

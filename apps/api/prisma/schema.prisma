@@ -92,6 +92,17 @@ model User {
   monthlyCloseEvents         MonthlyCloseEvent[]          @relation("MonthlyCloseEventActor")
   /// Các giao dịch ngân hàng do Admin xử lý thủ công khi đối soát.
   resolvedBankTransactions   BankTransaction[]            @relation("BankTransactionResolver")
+  /// Các phiên đăng nhập đang hoạt động hoặc đã bị thu hồi của tài khoản.
+  authSessions               AuthSession[]
+  /// Các mã khôi phục mật khẩu đã phát hành; chỉ lưu bản băm, không lưu OTP gốc.
+  passwordResetChallenges    PasswordResetChallenge[]
+  /// Các trang giới thiệu, hỗ trợ và chính sách do Admin cập nhật.
+  editedContentPages         ContentPage[]                @relation("ContentPageEditor")
+  /// Các banner trang chủ do Admin cập nhật.
+  editedHomepageBanners      HomepageBanner[]             @relation("HomepageBannerEditor")
+  /// Các hội thoại CSKH theo từng chi nhánh và các tin nhắn mà tài khoản đã gửi.
+  supportConversations       SupportConversation[]         @relation("SupportCustomer")
+  supportMessages            SupportMessage[]             @relation("SupportMessageSender")
 
   // Trạng thái tài khoản: true = hoạt động, false = bị khóa
   isActive Boolean @default(true)
@@ -119,6 +130,123 @@ model User {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/// Phiên đăng nhập phía máy chủ. Access Token chỉ hợp lệ khi phiên này còn hiệu lực,
+/// nhờ vậy thao tác đăng xuất có thể thu hồi token ngay thay vì chỉ xóa ở trình duyệt.
+model AuthSession {
+  id String @id @default(uuid()) @db.Uuid
+
+  userId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Mốc hết hạn an toàn phía máy chủ; phía trình duyệt vẫn dùng sessionStorage
+  /// nên token tự biến mất khi người dùng đóng phiên duyệt web.
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  lastSeenAt DateTime  @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, revokedAt, expiresAt])
+  @@index([expiresAt])
+}
+
+/// Mã xác nhận dùng một lần cho luồng quên mật khẩu.
+/// OTP gốc chỉ được gửi qua email; database chỉ giữ bản băm để giảm rủi ro lộ dữ liệu.
+model PasswordResetChallenge {
+  id String @id @default(uuid()) @db.Uuid
+
+  userId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  otpHash    String    @db.VarChar(64)
+  expiresAt  DateTime
+  attempts   Int       @default(0)
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId, consumedAt, createdAt])
+  @@index([expiresAt])
+}
+
+/// Trang nội dung công khai do Admin quản lý thay vì viết cứng trong giao diện.
+/// Có thể lựa chọn từng trang xuất hiện ở header, footer và thời điểm công khai.
+model ContentPage {
+  id Int @id @default(autoincrement())
+
+  slug    String  @unique @db.VarChar(120)
+  title   String  @db.VarChar(180)
+  summary String? @db.VarChar(500)
+  content String  @db.Text
+
+  /// ABOUT: giới thiệu; SUPPORT: hỗ trợ; POLICY: chính sách pháp lý.
+  category String @db.VarChar(20)
+
+  isPublished  Boolean @default(false)
+  showInHeader Boolean @default(false)
+  showInFooter Boolean @default(true)
+  sortOrder    Int     @default(0)
+
+  updatedById Int?
+  updatedBy   User? @relation("ContentPageEditor", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  homepageBanners HomepageBanner[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isPublished, category, sortOrder])
+  @@index([showInHeader, isPublished, sortOrder])
+  @@index([showInFooter, isPublished, sortOrder])
+}
+
+/// Banner ưu đãi trên trang chủ. API công khai tự kiểm tra thời gian hiệu lực
+/// và phạm vi chi nhánh trước khi trả dữ liệu cho khách.
+model HomepageBanner {
+  id Int @id @default(autoincrement())
+
+  eyebrow     String? @db.VarChar(80)
+  title       String  @db.VarChar(180)
+  subtitle    String? @db.VarChar(500)
+  buttonLabel String? @db.VarChar(60)
+  imageUrl    String? @db.VarChar(500)
+  theme       String  @default("AMBER") @db.VarChar(20)
+
+  /// NONE, MENU, PRODUCT, VOUCHER, CONTENT_PAGE hoặc CUSTOM_URL.
+  targetType String  @default("NONE") @db.VarChar(30)
+  customUrl  String? @db.VarChar(500)
+
+  productId Int?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  voucherId Int?
+  voucher   Voucher? @relation(fields: [voucherId], references: [id], onDelete: SetNull)
+
+  contentPageId Int?
+  contentPage   ContentPage? @relation(fields: [contentPageId], references: [id], onDelete: SetNull)
+
+  /// Null là toàn hệ thống; có giá trị là banner riêng của chi nhánh.
+  branchId Int?
+  branch   StoreBranch? @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  startsAt  DateTime?
+  endsAt    DateTime?
+  isActive  Boolean   @default(true)
+  sortOrder Int       @default(0)
+
+  updatedById Int?
+  updatedBy   User? @relation("HomepageBannerEditor", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive, startsAt, endsAt, sortOrder])
+  @@index([branchId, isActive, sortOrder])
+  @@index([productId])
+  @@index([voucherId])
+  @@index([contentPageId])
 }
 
 /// Thông tin cá nhân dùng chung cho mọi tài khoản, tách khỏi dữ liệu bảo mật đăng nhập.
@@ -213,9 +341,11 @@ model Product {
   productReviews ProductReview[]
 
   // Những user đã đánh dấu sản phẩm này là yêu thích
-  favoritedBy  ProductFavorite[]
+  favoritedBy     ProductFavorite[]
   /// Lịch sử thay đổi giá của mọi size thuộc sản phẩm, giữ cả tên món dạng snapshot.
-  priceHistory ProductPriceHistory[]
+  priceHistory    ProductPriceHistory[]
+  /// Banner đang liên kết trực tiếp đến món này.
+  homepageBanners HomepageBanner[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -564,6 +694,12 @@ enum OrderChannel {
   POS
 }
 
+enum SupportConversationStatus {
+  OPEN
+  WAITING_CUSTOMER
+  RESOLVED
+}
+
 // Đơn hàng của người dùng
 model Order {
   id Int @id @default(autoincrement())
@@ -623,6 +759,8 @@ model Order {
   inventoryMovements       InventoryMovement[]
   /// Chứng từ hoàn tiền nếu đơn đã thanh toán bị hủy; mỗi đơn chỉ được hoàn toàn bộ một lần.
   refund                   PaymentRefund?
+  /// Hội thoại CSKH đang tham chiếu đơn này để Nhân viên trưởng xử lý đúng chi nhánh.
+  supportConversations     SupportConversation[] @relation("SupportRelatedOrder")
 
   // Voucher đã áp dụng cho đơn hàng
   voucherId Int?
@@ -701,6 +839,64 @@ model Notification {
   @@index([userId, isRead])
   @@index([userId, createdAt])
   @@index([orderId])
+}
+
+/// Một hộp thư CSKH cho mỗi khách hàng tại mỗi chi nhánh. Đơn liên quan là
+/// tùy chọn và dùng để tuyến yêu cầu đến đúng Nhân viên trưởng.
+model SupportConversation {
+  id Int @id @default(autoincrement())
+
+  customerId Int
+  customer   User @relation("SupportCustomer", fields: [customerId], references: [id], onDelete: Cascade)
+
+  branchId Int
+  branch   StoreBranch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  relatedOrderId Int?
+  relatedOrder   Order? @relation("SupportRelatedOrder", fields: [relatedOrderId], references: [id], onDelete: SetNull)
+
+  status        SupportConversationStatus @default(OPEN)
+  lastMessageAt DateTime                  @default(now())
+  /// Phản hồi đầu tiên của nhân viên, dùng để đo SLA CSKH.
+  firstResponseAt DateTime?
+  /// Thời điểm hội thoại được đánh dấu hoàn tất gần nhất.
+  resolvedAt      DateTime?
+  /// Số lần hội thoại đã hoàn tất rồi được khách hoặc quản lý mở lại.
+  reopenedCount   Int       @default(0)
+
+  messages SupportMessage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([customerId, branchId])
+  @@index([branchId, status, lastMessageAt])
+  @@index([branchId, createdAt])
+  @@index([firstResponseAt])
+  @@index([relatedOrderId])
+}
+
+/// Tin nhắn trong hội thoại; senderType là snapshot CUSTOMER, STAFF hoặc ADMIN
+/// (ADMIN chỉ còn dùng cho dữ liệu phản hồi cũ) để
+/// hiển thị đúng phía gửi ngay cả khi quyền tài khoản thay đổi về sau.
+model SupportMessage {
+  id Int @id @default(autoincrement())
+
+  conversationId Int
+  conversation   SupportConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  senderId   Int
+  sender     User   @relation("SupportMessageSender", fields: [senderId], references: [id], onDelete: Restrict)
+  senderType String @db.VarChar(20)
+  content    String @db.VarChar(2000)
+
+  readByAdminAt    DateTime?
+  readByCustomerAt DateTime?
+  createdAt        DateTime  @default(now())
+
+  @@index([conversationId, createdAt])
+  @@index([senderType, readByAdminAt])
+  @@index([senderType, readByCustomerAt])
 }
 
 // Một sản phẩm trong đơn hàng
@@ -877,8 +1073,10 @@ model Voucher {
   isActive Boolean @default(true)
 
   // Các đơn hàng đã áp dụng voucher
-  orders        Order[]
-  orderVouchers OrderVoucher[]
+  orders          Order[]
+  orderVouchers   OrderVoucher[]
+  /// Banner đang quảng bá voucher này.
+  homepageBanners HomepageBanner[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1126,11 +1324,21 @@ model StoreSettings {
   closingTime String @default("22:00") @db.VarChar(5)
 
   /// Thời gian chuẩn dự kiến để cửa hàng chuẩn bị một đơn, tính bằng phút.
-  preparationMinutes    Int     @default(20)
+  preparationMinutes              Int     @default(20)
   /// Bán kính giao hàng tối đa tính từ chi nhánh đến địa chỉ khách, đơn vị km.
-  maxDeliveryDistanceKm Decimal @default(15) @db.Decimal(6, 2)
+  maxDeliveryDistanceKm           Decimal @default(15) @db.Decimal(6, 2)
+  /// Quãng đường đã bao gồm trong phí giao hàng cơ bản.
+  deliveryBaseDistanceKm          Decimal @default(3) @db.Decimal(6, 2)
+  /// Phí giao hàng trong quãng đường cơ bản và phụ phí cho mỗi km vượt mốc.
+  deliveryBaseFee                 Int     @default(15000)
+  deliveryFeePerKm                Int     @default(5000)
+  /// Hai mốc ưu đãi phí giao hàng theo giá trị tiền hàng trước voucher và điểm.
+  deliveryDiscountFirstThreshold  Int     @default(300000)
+  deliveryDiscountFirstAmount     Int     @default(20000)
+  deliveryDiscountSecondThreshold Int     @default(500000)
+  deliveryDiscountSecondAmount    Int     @default(40000)
   /// Lý do tạm dừng nhận đơn hiển thị cho khách khi công tắc tổng bị tắt.
-  pauseReason           String? @db.VarChar(200)
+  pauseReason                     String? @db.VarChar(200)
 
   /// Biên lợi nhuận gộp mục tiêu dùng để đề xuất giá bán cho mọi món.
   pricingTargetMarginPercent Decimal @default(60) @db.Decimal(5, 2)
@@ -1158,6 +1366,11 @@ model StoreBranch {
   address String? @db.VarChar(255)
   /// Số điện thoại liên hệ của chi nhánh.
   phone   String? @db.VarChar(20)
+
+  /// Vĩ độ và kinh độ phục vụ bản đồ, chỉ đường và tính khoảng cách giao hàng.
+  /// Hai giá trị luôn được cập nhật cùng nhau để tránh một vị trí không hoàn chỉnh.
+  latitude  Decimal? @db.Decimal(10, 7)
+  longitude Decimal? @db.Decimal(10, 7)
 
   /// Ngày khai trương thực tế, tách biệt với ngày tạo bản ghi trên hệ thống.
   openedAt DateTime? @db.Date
@@ -1208,6 +1421,10 @@ model StoreBranch {
   monthlyClosePeriods   MonthlyClosePeriod[]
   /// Tài khoản nhận chuyển khoản dùng để tạo VietQR cho chi nhánh.
   bankAccount           BranchBankAccount?
+  /// Banner chỉ hiển thị trong phạm vi chi nhánh này.
+  homepageBanners       HomepageBanner[]
+  /// Hội thoại CSKH được tuyến đến chi nhánh này.
+  supportConversations  SupportConversation[]
 }
 
 /// Lịch sử giá bán bất biến của từng size sau khi được Admin xác nhận áp dụng.

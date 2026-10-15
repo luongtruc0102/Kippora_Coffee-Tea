@@ -1,11 +1,13 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   ChevronDown,
   Eye,
   LockKeyhole,
+  MapPinned,
   Pencil,
   Plus,
   Search,
@@ -33,6 +35,22 @@ import { getAdminUsers } from "@/services/user.service";
 
 const CODE_PATTERN = /^[A-Za-z0-9_-]{2,20}$/;
 const PHONE_PATTERN = /^[0-9]{9,11}$/;
+const DEFAULT_STORE_COORDINATES = {
+  latitude: 10.8569371,
+  longitude: 106.7465042,
+};
+
+const BranchLocationPicker = dynamic(
+  () => import("@/components/user/delivery-route-map"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-72 items-center justify-center rounded-2xl bg-[#F6F0E9] text-sm text-[#78866B]">
+        Đang mở bản đồ...
+      </div>
+    ),
+  },
+);
 
 export default function AdminBranchesPage() {
   const { showToast } = useAppToast();
@@ -59,6 +77,8 @@ export default function AdminBranchesPage() {
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState("");
+  const [latitude, setLatitude] = useState("");
+  const [longitude, setLongitude] = useState("");
   const [openedAt, setOpenedAt] = useState("");
 
   const loadBranches = useCallback(async (signal?: AbortSignal) => {
@@ -143,6 +163,8 @@ export default function AdminBranchesPage() {
     setName("");
     setAddress("");
     setPhone("");
+    setLatitude("");
+    setLongitude("");
     setOpenedAt("");
     setError("");
     setFormOpen(true);
@@ -154,6 +176,8 @@ export default function AdminBranchesPage() {
     setName(branch.name);
     setAddress(branch.address ?? "");
     setPhone(branch.phone ?? "");
+    setLatitude(branch.latitude?.toString() ?? "");
+    setLongitude(branch.longitude?.toString() ?? "");
     setOpenedAt(branch.openedAt?.slice(0, 10) ?? "");
     setError("");
     setFormOpen(true);
@@ -170,6 +194,8 @@ export default function AdminBranchesPage() {
     setName("");
     setAddress("");
     setPhone("");
+    setLatitude("");
+    setLongitude("");
     setOpenedAt("");
   }
 
@@ -200,11 +226,41 @@ export default function AdminBranchesPage() {
         throw new Error("Số điện thoại không hợp lệ.");
       }
 
+      const hasLatitude = latitude.trim() !== "";
+      const hasLongitude = longitude.trim() !== "";
+
+      if (hasLatitude !== hasLongitude) {
+        throw new Error("Vui lòng nhập đầy đủ cả vĩ độ và kinh độ.");
+      }
+
+      const parsedLatitude = hasLatitude ? Number(latitude) : null;
+      const parsedLongitude = hasLongitude ? Number(longitude) : null;
+
+      if (
+        parsedLatitude !== null &&
+        (!Number.isFinite(parsedLatitude) ||
+          parsedLatitude < -90 ||
+          parsedLatitude > 90)
+      ) {
+        throw new Error("Vĩ độ phải nằm trong khoảng -90 đến 90.");
+      }
+
+      if (
+        parsedLongitude !== null &&
+        (!Number.isFinite(parsedLongitude) ||
+          parsedLongitude < -180 ||
+          parsedLongitude > 180)
+      ) {
+        throw new Error("Kinh độ phải nằm trong khoảng -180 đến 180.");
+      }
+
       if (editingBranch) {
         await updateBranch(accessToken, editingBranch.id, {
           name: name.trim(),
           address: address.trim() || null,
           phone: phone.trim() || null,
+          latitude: parsedLatitude,
+          longitude: parsedLongitude,
           openedAt: openedAt || null,
         });
         showToast("Đã cập nhật chi nhánh", "success");
@@ -214,6 +270,8 @@ export default function AdminBranchesPage() {
           name: name.trim(),
           address: address.trim() || undefined,
           phone: phone.trim() || undefined,
+          latitude: parsedLatitude ?? undefined,
+          longitude: parsedLongitude ?? undefined,
           openedAt: openedAt || undefined,
         });
         showToast("Đã thêm chi nhánh", "success");
@@ -226,6 +284,8 @@ export default function AdminBranchesPage() {
       setName("");
       setAddress("");
       setPhone("");
+      setLatitude("");
+      setLongitude("");
       setOpenedAt("");
     } catch (submitError) {
       setError(
@@ -571,7 +631,7 @@ export default function AdminBranchesPage() {
 
       {formOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-xl rounded-2xl border border-[#E9E1D8] bg-white shadow-xl">
+          <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-[#E9E1D8] bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-[#E9E1D8] px-6 py-4">
               <div>
                 <h3 className="text-xl font-semibold text-[#1F1B18]">
@@ -617,6 +677,68 @@ export default function AdminBranchesPage() {
                     placeholder="0901234567"
                     className="h-11 w-full rounded-xl border border-[#E9E1D8] px-4 text-sm outline-none focus:border-[#C9894B]"
                   />
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <MapPinned size={18} className="text-[#C9894B]" />
+                  <div>
+                    <p className="text-sm font-semibold text-[#1F1B18]">
+                      Vị trí trên bản đồ
+                    </p>
+                    <p className="text-xs text-[#8A817B]">
+                      Bấm vào bản đồ để lấy tọa độ chính xác cho trang Cửa hàng.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="overflow-hidden rounded-2xl border border-[#E9E1D8]">
+                  <BranchLocationPicker
+                    storeCoordinates={
+                      latitude && longitude
+                        ? {
+                            latitude: Number(latitude),
+                            longitude: Number(longitude),
+                          }
+                        : DEFAULT_STORE_COORDINATES
+                    }
+                    customerCoordinates={null}
+                    routeCoordinates={[]}
+                    onLocationSelect={(coordinate) => {
+                      setLatitude(coordinate.latitude.toFixed(7));
+                      setLongitude(coordinate.longitude.toFixed(7));
+                    }}
+                  />
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-[#1F1B18]">
+                      Vĩ độ
+                    </label>
+                    <input
+                      type="number"
+                      step="0.0000001"
+                      value={latitude}
+                      onChange={(event) => setLatitude(event.target.value)}
+                      placeholder="10.8569371"
+                      className="h-11 w-full rounded-xl border border-[#E9E1D8] px-4 text-sm outline-none focus:border-[#C9894B]"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-[#1F1B18]">
+                      Kinh độ
+                    </label>
+                    <input
+                      type="number"
+                      step="0.0000001"
+                      value={longitude}
+                      onChange={(event) => setLongitude(event.target.value)}
+                      placeholder="106.7465042"
+                      className="h-11 w-full rounded-xl border border-[#E9E1D8] px-4 text-sm outline-none focus:border-[#C9894B]"
+                    />
+                  </div>
                 </div>
               </div>
 

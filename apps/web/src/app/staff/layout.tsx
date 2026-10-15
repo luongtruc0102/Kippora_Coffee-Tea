@@ -11,6 +11,7 @@ import {
   HandCoins,
   Landmark,
   LogOut,
+  MessagesSquare,
   PackageCheck,
   Boxes,
   Power,
@@ -32,7 +33,7 @@ import {
 } from "@/services/store-settings.service";
 import type { BranchStatus, StoreStatus } from "@/types/store-settings";
 import { useAppToast } from "@/components/ui/app-toast-provider";
-import { getMe } from "@/services/auth.service";
+import { getMe, logout } from "@/services/auth.service";
 
 type StoredUser = {
   id: number;
@@ -40,6 +41,53 @@ type StoredUser = {
   fullName: string | null;
   role: string;
 };
+
+const managementMenuItems = [
+  {
+    href: "/staff/chat",
+    label: "Chat / CSKH",
+    icon: MessagesSquare,
+  },
+  {
+    href: "/staff/notifications",
+    label: "Cảnh báo vận hành",
+    icon: Bell,
+  },
+  { href: "/staff/schedules", label: "Lịch làm", icon: CalendarDays },
+  { href: "/staff/payroll", label: "Bảng lương", icon: Banknote },
+  { href: "/staff/employees", label: "Nhân viên", icon: Users },
+  {
+    href: "/staff/purchase-orders",
+    label: "Đặt hàng NCC",
+    icon: ClipboardList,
+  },
+  {
+    href: "/staff/inventory-counts",
+    label: "Kiểm kê kho",
+    icon: ClipboardCheck,
+  },
+  {
+    href: "/staff/inventory-lots",
+    label: "Lô & hạn dùng",
+    icon: Boxes,
+  },
+  { href: "/staff/expenses", label: "Chi phí", icon: HandCoins },
+  {
+    href: "/staff/cash-reconciliation",
+    label: "Chốt quỹ",
+    icon: Landmark,
+  },
+  {
+    href: "/staff/activity-logs",
+    label: "Nhật ký",
+    icon: ScrollText,
+  },
+  {
+    href: "/staff/month-close",
+    label: "Chốt sổ tháng",
+    icon: BookCheck,
+  },
+] as const;
 
 export default function StaffLayout({
   children,
@@ -65,19 +113,11 @@ export default function StaffLayout({
 
   const managementMenuRef = useRef<HTMLDivElement>(null);
 
-  const managementMenuActive = [
-    "/staff/schedules",
-    "/staff/payroll",
-    "/staff/employees",
-    "/staff/expenses",
-    "/staff/inventory-counts",
-    "/staff/inventory-lots",
-    "/staff/purchase-orders",
-    "/staff/cash-reconciliation",
-    "/staff/activity-logs",
-    "/staff/month-close",
-    "/staff/notifications",
-  ].some((route) => pathname.startsWith(route));
+  const selectedManagementItem = managementMenuItems.find((item) =>
+    pathname.startsWith(item.href),
+  );
+  const SelectedManagementIcon = selectedManagementItem?.icon ?? Users;
+  const managementMenuActive = Boolean(selectedManagementItem);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -126,8 +166,7 @@ export default function StaffLayout({
           JSON.stringify({ ...parsedUser, ...currentUser }),
         );
 
-        // Khu vực Staff là bàn điều hành dành riêng cho trưởng chi nhánh.
-        // Nhân viên thường tiếp tục dùng giao diện khách và tự điểm danh tại đó.
+        // Khu vực Staff, bao gồm hộp thư CSKH, chỉ dành cho trưởng chi nhánh.
         if (currentUser.role !== "BRANCH_MANAGER") {
           router.replace(currentUser.role === "ADMIN" ? "/admin" : "/");
           return;
@@ -230,11 +269,18 @@ export default function StaffLayout({
     }
   }
 
-  function handleLogout() {
-    sessionStorage.removeItem("accessToken");
-    sessionStorage.removeItem("user");
+  async function handleLogout() {
+    const accessToken = sessionStorage.getItem("accessToken");
 
-    router.replace("/login");
+    try {
+      if (accessToken) await logout(accessToken);
+    } catch {
+      // Mất mạng vẫn phải cho người dùng kết thúc phiên trên thiết bị này.
+    } finally {
+      sessionStorage.removeItem("accessToken");
+      sessionStorage.removeItem("user");
+      router.replace("/login");
+    }
   }
 
   if (!authorized) {
@@ -305,8 +351,8 @@ export default function StaffLayout({
                       : "text-[#5E5650] hover:bg-[#FAF8F5] hover:text-[#4A2C20]"
                   }`}
                 >
-                  <Users size={17} />
-                  Quản lý
+                  <SelectedManagementIcon size={17} />
+                  {selectedManagementItem?.label ?? "Quản lý"}
                   <ChevronDown
                     size={15}
                     className={`transition-transform ${managementMenuOpen ? "rotate-180" : ""}`}
@@ -318,6 +364,19 @@ export default function StaffLayout({
                     role="menu"
                     className="absolute left-0 top-[calc(100%+0.5rem)] z-50 max-h-[calc(100vh-5rem)] w-56 overflow-y-auto rounded-2xl border border-[#E9E1D8] bg-white p-2 shadow-xl"
                   >
+                    <Link
+                      href="/staff/chat"
+                      role="menuitem"
+                      onClick={() => setManagementMenuOpen(false)}
+                      className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
+                        pathname.startsWith("/staff/chat")
+                          ? "bg-[#F3E9DE] text-[#4A2C20]"
+                          : "text-[#5E5650] hover:bg-[#FAF8F5] hover:text-[#4A2C20]"
+                      }`}
+                    >
+                      <MessagesSquare size={17} />
+                      Chat / CSKH
+                    </Link>
                     <Link
                       href="/staff/notifications"
                       role="menuitem"

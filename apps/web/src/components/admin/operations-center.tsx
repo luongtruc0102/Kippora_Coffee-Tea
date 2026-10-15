@@ -4,7 +4,9 @@ import {
   CalendarClock,
   CheckCircle2,
   ClipboardCheck,
+  ClipboardList,
   HandCoins,
+  Hourglass,
   Landmark,
   PackagePlus,
   ShoppingBag,
@@ -70,7 +72,13 @@ export default function OperationsCenter({
     data.summary.pendingExpenses +
     data.summary.pendingCashSessions +
     data.summary.overdueCashSessions +
-    data.summary.branchesWithoutShifts;
+    data.summary.branchesWithoutShifts +
+    data.summary.expiredLots +
+    data.summary.expiringLots +
+    data.summary.pendingInventoryCounts +
+    data.summary.pendingPurchaseOrders +
+    data.summary.overduePurchaseOrders +
+    data.summary.bankReconciliationIssues;
 
   const attentionItems = [
     ...(data.summary.pendingLeaveRequests
@@ -146,6 +154,67 @@ export default function OperationsCenter({
           },
         ]
       : []),
+    ...(data.summary.expiredLots || data.summary.expiringLots
+      ? [
+          {
+            key: "inventory-lot-expiry",
+            title: data.summary.expiredLots
+              ? `${data.summary.expiredLots} lô đã hết hạn cần xử lý`
+              : `${data.summary.expiringLots} lô sắp hết hạn trong 7 ngày`,
+            description: data.summary.expiredLots
+              ? `Ngoài ra có ${data.summary.expiringLots} lô sắp hết hạn.`
+              : "Ưu tiên sử dụng hoặc lên phương án xử lý để tránh hao hụt.",
+            href: "/admin/inventory-lots",
+            icon: Hourglass,
+          },
+        ]
+      : []),
+    ...(data.summary.pendingInventoryCounts
+      ? [
+          {
+            key: "pending-inventory-counts",
+            title: `${data.summary.pendingInventoryCounts} phiếu kiểm kê đang chờ duyệt`,
+            description:
+              "Kiểm tra chênh lệch trước khi điều chỉnh số lượng trong kho.",
+            href: "/admin/inventory-counts",
+            icon: ClipboardCheck,
+          },
+        ]
+      : []),
+    ...(data.summary.pendingPurchaseOrders
+      ? [
+          {
+            key: "pending-purchase-orders",
+            title: `${data.summary.pendingPurchaseOrders} đơn đặt nhà cung cấp chờ duyệt`,
+            description: "Duyệt sớm để chi nhánh kịp bổ sung nguyên liệu.",
+            href: "/admin/purchase-orders",
+            icon: ClipboardList,
+          },
+        ]
+      : []),
+    ...(data.summary.overduePurchaseOrders
+      ? [
+          {
+            key: "overdue-purchase-orders",
+            title: `${data.summary.overduePurchaseOrders} đơn nhập hàng đã quá ngày dự kiến`,
+            description: "Kiểm tra tiến độ giao hàng với nhà cung cấp.",
+            href: "/admin/purchase-orders",
+            icon: PackagePlus,
+          },
+        ]
+      : []),
+    ...(data.summary.bankReconciliationIssues
+      ? [
+          {
+            key: "bank-reconciliation",
+            title: `${data.summary.bankReconciliationIssues} giao dịch ngân hàng cần đối soát`,
+            description:
+              "Bao gồm giao dịch chưa ghép, lệch số tiền hoặc bị gửi trùng.",
+            href: "/admin/bank-reconciliation",
+            icon: Landmark,
+          },
+        ]
+      : []),
     ...(data.branchesWithoutShifts.length
       ? [
           {
@@ -170,9 +239,12 @@ export default function OperationsCenter({
       className: "bg-amber-50 text-amber-700",
     },
     {
-      label: "Kho sắp hết",
-      value: data.summary.lowStockItems,
-      description: "Nguyên liệu chạm ngưỡng",
+      label: "Kho cần chú ý",
+      value:
+        data.summary.lowStockItems +
+        data.summary.expiredLots +
+        data.summary.expiringLots,
+      description: `${data.summary.lowStockItems} tồn thấp · ${data.summary.expiredLots} hết hạn`,
       icon: Warehouse,
       className: "bg-red-50 text-red-600",
     },
@@ -206,7 +278,8 @@ export default function OperationsCenter({
           </p>
         </div>
         <p className="text-xs text-[#9A9089]">
-          Cập nhật lúc {new Intl.DateTimeFormat("vi-VN", {
+          Cập nhật lúc{" "}
+          {new Intl.DateTimeFormat("vi-VN", {
             timeZone: "Asia/Ho_Chi_Minh",
             hour: "2-digit",
             minute: "2-digit",
@@ -282,7 +355,8 @@ export default function OperationsCenter({
               })}
               {attentionItems.length > 8 && (
                 <p className="pt-1 text-center text-xs text-[#8A817B]">
-                  Còn {attentionItems.length - 8} cảnh báo khác trong các trang quản lý.
+                  Còn {attentionItems.length - 8} cảnh báo khác trong các trang
+                  quản lý.
                 </p>
               )}
             </div>
@@ -301,7 +375,7 @@ export default function OperationsCenter({
 
         <div className="min-w-0">
           <div className="mb-3 flex items-center justify-between">
-            <h4 className="font-bold text-[#2A211D]">Nguyên liệu sắp hết</h4>
+            <h4 className="font-bold text-[#2A211D]">Cảnh báo kho</h4>
             <Link
               href="/admin/inventory"
               className="text-xs font-semibold text-[#9F642F] hover:underline"
@@ -310,46 +384,94 @@ export default function OperationsCenter({
             </Link>
           </div>
 
-          {data.lowStockItems.length ? (
-            <div className="space-y-2">
-              {data.lowStockItems.map((item) => {
-                const unit = unitLabels[item.unit];
-                const outOfStock = item.availableQuantity <= 0;
-                return (
-                  <Link
-                    key={item.stockId}
-                    href="/admin/inventory"
-                    className="flex items-center justify-between gap-3 rounded-2xl border border-[#EEE5DC] p-3 transition hover:border-red-200 hover:bg-red-50/40"
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-semibold text-[#2A211D]">
-                        {item.ingredientName}
-                      </span>
-                      <span className="mt-0.5 block truncate text-xs text-[#8A817B]">
-                        {item.branch.code} · Ngưỡng {formatNumber(item.minimumLevel)} {unit}
-                      </span>
-                    </span>
-                    <span
-                      className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${
-                        outOfStock
-                          ? "bg-red-100 text-red-700"
-                          : "bg-amber-50 text-amber-700"
-                      }`}
-                    >
-                      {outOfStock
-                        ? "Đã hết"
-                        : `Còn ${formatNumber(item.availableQuantity)} ${unit}`}
-                    </span>
-                  </Link>
-                );
-              })}
+          {data.lowStockItems.length || data.inventoryLotAlerts.length ? (
+            <div className="space-y-4">
+              {data.lowStockItems.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-bold uppercase tracking-wide text-[#8A817B]">
+                    Tồn kho chạm ngưỡng
+                  </p>
+                  {data.lowStockItems.slice(0, 4).map((item) => {
+                    const unit = unitLabels[item.unit];
+                    const outOfStock = item.availableQuantity <= 0;
+                    return (
+                      <Link
+                        key={item.stockId}
+                        href="/admin/inventory"
+                        className="flex items-center justify-between gap-3 rounded-2xl border border-[#EEE5DC] p-3 transition hover:border-red-200 hover:bg-red-50/40"
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-semibold text-[#2A211D]">
+                            {item.ingredientName}
+                          </span>
+                          <span className="mt-0.5 block truncate text-xs text-[#8A817B]">
+                            {item.branch.code} · Ngưỡng{" "}
+                            {formatNumber(item.minimumLevel)} {unit}
+                          </span>
+                        </span>
+                        <span
+                          className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${
+                            outOfStock
+                              ? "bg-red-100 text-red-700"
+                              : "bg-amber-50 text-amber-700"
+                          }`}
+                        >
+                          {outOfStock
+                            ? "Đã hết"
+                            : `Còn ${formatNumber(item.availableQuantity)} ${unit}`}
+                        </span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
               {data.summary.lowStockItems > data.lowStockItems.length && (
                 <Link
                   href="/admin/inventory"
                   className="block pt-1 text-center text-xs font-semibold text-[#9F642F] hover:underline"
                 >
-                  Xem thêm {data.summary.lowStockItems - data.lowStockItems.length} nguyên liệu
+                  Xem thêm{" "}
+                  {data.summary.lowStockItems - data.lowStockItems.length}{" "}
+                  nguyên liệu
                 </Link>
+              )}
+              {data.inventoryLotAlerts.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-bold uppercase tracking-wide text-[#8A817B]">
+                    Hạn sử dụng
+                  </p>
+                  {data.inventoryLotAlerts.slice(0, 4).map((lot) => (
+                    <Link
+                      key={lot.id}
+                      href="/admin/inventory-lots"
+                      className="flex items-center justify-between gap-3 rounded-2xl border border-[#EEE5DC] p-3 transition hover:border-amber-200 hover:bg-amber-50/40"
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-semibold text-[#2A211D]">
+                          {lot.ingredientName} · {lot.code}
+                        </span>
+                        <span className="mt-0.5 block truncate text-xs text-[#8A817B]">
+                          {lot.branch.code} · Còn{" "}
+                          {formatNumber(lot.availableQuantity)}{" "}
+                          {unitLabels[lot.unit]}
+                        </span>
+                      </span>
+                      <span
+                        className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${
+                          lot.expiryState === "EXPIRED"
+                            ? "bg-red-100 text-red-700"
+                            : "bg-amber-50 text-amber-700"
+                        }`}
+                      >
+                        {lot.expiryState === "EXPIRED"
+                          ? `Quá ${Math.abs(lot.daysToExpiry)} ngày`
+                          : lot.daysToExpiry === 0
+                            ? "Hết hạn hôm nay"
+                            : `Còn ${lot.daysToExpiry} ngày`}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
               )}
             </div>
           ) : (

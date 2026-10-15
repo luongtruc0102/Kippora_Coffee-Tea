@@ -22,6 +22,8 @@ export const AUDIT_MODULES = [
   'PAYMENT',
   'PRICING',
   'MONTH_CLOSE',
+  'CONTENT',
+  'SUPPORT',
 ] as const;
 
 export class ListAuditLogsDto {

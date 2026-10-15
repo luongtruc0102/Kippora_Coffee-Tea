@@ -4,6 +4,7 @@ import {
   Building2,
   CalendarDays,
   Clock3,
+  ExternalLink,
   MapPin,
   Pencil,
   Phone,
@@ -93,6 +94,15 @@ export default function BranchDetailModal({
                 full
               />
               <InfoCard
+                icon={<MapPin size={18} />}
+                label="Tọa độ bản đồ"
+                value={
+                  branch.latitude !== null && branch.longitude !== null
+                    ? `${branch.latitude.toFixed(7)}, ${branch.longitude.toFixed(7)}`
+                    : "Chưa cập nhật"
+                }
+              />
+              <InfoCard
                 icon={<Phone size={18} />}
                 label="Số điện thoại"
                 value={branch.phone || "Chưa cập nhật"}
@@ -103,6 +113,17 @@ export default function BranchDetailModal({
                 value={formatDate(branch.openedAt)}
               />
             </div>
+            {branch.latitude !== null && branch.longitude !== null && (
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${branch.latitude},${branch.longitude}`}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-[#B66F31] hover:text-[#8E5020]"
+              >
+                <ExternalLink size={16} />
+                Xem vị trí trên bản đồ
+              </a>
+            )}
           </section>
 
           <section>

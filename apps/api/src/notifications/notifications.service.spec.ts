@@ -171,6 +171,34 @@ describe('NotificationsService', () => {
     expect(alert.actionUrl).toBe('/admin/bank-reconciliation');
   });
 
+  it('gắn cảnh báo CSKH quá hạn vào màn hình giám sát hội thoại', () => {
+    const alert = enrichOperationalNotification(
+      {
+        id: 5,
+        userId: 7,
+        orderId: null,
+        type: 'SUPPORT_RESPONSE_OVERDUE',
+        title: 'Hội thoại CSKH chờ quá lâu',
+        message: 'Q9 · Khách hàng đang chờ phản hồi hơn 10 phút.',
+        dedupeKey: 'SUPPORT_RESPONSE_OVERDUE:2:2026-10-06T00:00:00.000Z',
+        isRead: false,
+        readAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      'ADMIN',
+    );
+
+    expect(alert).toEqual(
+      expect.objectContaining({
+        category: 'SYSTEM',
+        severity: 'WARNING',
+        actionUrl: '/admin/chat',
+        requiresAction: true,
+      }),
+    );
+  });
+
   it('chỉ đánh dấu đã đọc các thông báo thuộc nhóm vận hành', async () => {
     const updateMany = jest.fn().mockResolvedValue({ count: 3 });
     const service = createService({ notification: { updateMany } });
@@ -188,6 +216,7 @@ describe('NotificationsService', () => {
           in: expect.arrayContaining([
             'LOW_STOCK',
             'ATTENDANCE_MISSING',
+            'SUPPORT_RESPONSE_OVERDUE',
             'BANK_RECONCILIATION_AMOUNT_MISMATCH',
           ]),
         },

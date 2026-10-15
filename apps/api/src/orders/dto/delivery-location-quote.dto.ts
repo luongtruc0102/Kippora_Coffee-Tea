@@ -1,5 +1,6 @@
 import {
   IsIn,
+  IsInt,
   IsLatitude,
   IsLongitude,
   IsNumber,
@@ -26,4 +27,9 @@ export class DeliveryLocationQuoteDto {
   @IsOptional()
   @IsString()
   deliveryAddress?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  branchId?: number;
 }

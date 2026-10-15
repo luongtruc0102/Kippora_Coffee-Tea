@@ -1,10 +1,13 @@
 import { Transform } from 'class-transformer';
 import {
   IsDateString,
+  IsNumber,
   IsOptional,
   IsString,
   Matches,
+  Max,
   MaxLength,
+  Min,
   MinLength,
 } from 'class-validator';
 
@@ -50,6 +53,28 @@ export class CreateBranchDto {
     message: 'Số điện thoại không hợp lệ',
   })
   phone?: string;
+
+  @Transform(({ value }) =>
+    value === '' || value === null || value === undefined
+      ? undefined
+      : Number(value),
+  )
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 7 }, { message: 'Vĩ độ không hợp lệ' })
+  @Min(-90)
+  @Max(90)
+  latitude?: number;
+
+  @Transform(({ value }) =>
+    value === '' || value === null || value === undefined
+      ? undefined
+      : Number(value),
+  )
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 7 }, { message: 'Kinh độ không hợp lệ' })
+  @Min(-180)
+  @Max(180)
+  longitude?: number;
 
   @IsOptional()
   @IsDateString({}, { message: 'Ngày mở chi nhánh không hợp lệ' })
