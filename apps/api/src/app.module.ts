@@ -37,12 +37,14 @@ import { MonthCloseModule } from './month-close/month-close.module';
 import { ContentPagesModule } from './content-pages/content-pages.module';
 import { BannersModule } from './banners/banners.module';
 import { SupportModule } from './support/support.module';
+import { validateEnvironment } from './config/environment.validation';
 
 @Module({
   imports: [
     // Load biến môi trường từ .env và cho phép dùng ở toàn bộ backend
     ConfigModule.forRoot({
       isGlobal: true,
+      validate: validateEnvironment,
     }),
 
     // Giới hạn lưu lượng chung; các API nhạy cảm như đăng nhập có hạn mức thấp hơn.

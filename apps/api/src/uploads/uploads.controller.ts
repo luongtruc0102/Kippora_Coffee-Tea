@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Controller,
   Get,
   NotFoundException,
@@ -18,6 +17,10 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { createReadStream, existsSync, mkdirSync } from 'fs';
 import type { Request, Response } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  assertUploadedFileSignature,
+  SAFE_IMAGE_MIME_TYPES,
+} from './upload-security.util';
 
 interface AuthenticatedRequest extends Request {
   user: {
@@ -42,7 +45,12 @@ export class UploadsController {
         },
 
         filename: (_request, file, callback) => {
-          const extension = extname(file.originalname);
+          const extensionByMime: Record<string, string> = {
+            'image/jpeg': '.jpg',
+            'image/png': '.png',
+            'image/webp': '.webp',
+          };
+          const extension = extensionByMime[file.mimetype];
 
           const filename = `${Date.now()}-${Math.round(
             Math.random() * 1e9,
@@ -57,8 +65,11 @@ export class UploadsController {
       },
 
       fileFilter: (_request, file, callback) => {
-        if (!file.mimetype.startsWith('image/')) {
-          return callback(new Error('Chỉ được tải lên file hình ảnh'), false);
+        if (!SAFE_IMAGE_MIME_TYPES.includes(file.mimetype)) {
+          return callback(
+            new Error('Ảnh sản phẩm chỉ hỗ trợ JPG, PNG hoặc WEBP'),
+            false,
+          );
         }
 
         callback(null, true);
@@ -67,13 +78,17 @@ export class UploadsController {
   )
   uploadProductImage(
     @UploadedFile()
-    file: Express.Multer.File,
+    file: Express.Multer.File | undefined,
   ) {
+    const verifiedFile = assertUploadedFileSignature(
+      file,
+      'Vui lòng chọn ảnh sản phẩm',
+    );
     const apiUrl =
       process.env.API_PUBLIC_URL ??
       `http://localhost:${process.env.PORT ?? 4000}`;
     return {
-      imageUrl: `${apiUrl}/uploads/products/${file.filename}`,
+      imageUrl: `${apiUrl}/uploads/products/${verifiedFile.filename}`,
     };
   }
 
@@ -114,12 +129,15 @@ export class UploadsController {
     }),
   )
   uploadBannerImage(@UploadedFile() file: Express.Multer.File | undefined) {
-    if (!file) throw new BadRequestException('Vui lòng chọn ảnh banner');
+    const verifiedFile = assertUploadedFileSignature(
+      file,
+      'Vui lòng chọn ảnh banner',
+    );
     const apiUrl =
       process.env.API_PUBLIC_URL ??
       `http://localhost:${process.env.PORT ?? 4000}`;
     return {
-      imageUrl: `${apiUrl}/uploads/banners/${file.filename}`,
+      imageUrl: `${apiUrl}/uploads/banners/${verifiedFile.filename}`,
     };
   }
 
@@ -161,16 +179,17 @@ export class UploadsController {
     }),
   )
   uploadToppingImage(@UploadedFile() file: Express.Multer.File | undefined) {
-    if (!file) {
-      throw new BadRequestException('Vui lòng chọn ảnh topping');
-    }
+    const verifiedFile = assertUploadedFileSignature(
+      file,
+      'Vui lòng chọn ảnh topping',
+    );
 
     const apiUrl =
       process.env.API_PUBLIC_URL ??
       `http://localhost:${process.env.PORT ?? 4000}`;
 
     return {
-      imageUrl: `${apiUrl}/uploads/toppings/${file.filename}`,
+      imageUrl: `${apiUrl}/uploads/toppings/${verifiedFile.filename}`,
     };
   }
 
@@ -218,12 +237,15 @@ export class UploadsController {
     }),
   )
   uploadLeaveEvidence(@UploadedFile() file: Express.Multer.File | undefined) {
-    if (!file) throw new BadRequestException('Vui lòng chọn file minh chứng');
+    const verifiedFile = assertUploadedFileSignature(
+      file,
+      'Vui lòng chọn file minh chứng',
+    );
     const apiUrl =
       process.env.API_PUBLIC_URL ??
       `http://localhost:${process.env.PORT ?? 4000}`;
     return {
-      evidenceUrl: `${apiUrl}/uploads/leave-evidence/${file.filename}`,
+      evidenceUrl: `${apiUrl}/uploads/leave-evidence/${verifiedFile.filename}`,
     };
   }
 
@@ -352,16 +374,17 @@ export class UploadsController {
     @UploadedFile()
     file: Express.Multer.File | undefined,
   ) {
-    if (!file) {
-      throw new BadRequestException('Vui lòng chọn ảnh đại diện');
-    }
+    const verifiedFile = assertUploadedFileSignature(
+      file,
+      'Vui lòng chọn ảnh đại diện',
+    );
 
     const apiUrl =
       process.env.API_PUBLIC_URL ??
       `http://localhost:${process.env.PORT ?? 4000}`;
 
     return {
-      imageUrl: `${apiUrl}/uploads/avatars/${file.filename}`,
+      imageUrl: `${apiUrl}/uploads/avatars/${verifiedFile.filename}`,
     };
   }
 }
